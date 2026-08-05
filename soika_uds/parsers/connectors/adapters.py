@@ -922,7 +922,10 @@ class HtmlConnectorAdapter:
             messages.append(
                 SourceMessage(
                     source=self.source_id,
-                    external_id=f"document:{_stable_external_id(self.source_id, canonical_url, 'document')}",
+                    external_id=(
+                        "document:"
+                        + _stable_external_id(self.source_id, canonical_url, "document")
+                    ),
                     text=content,
                     published_at=_timestamp(published_value, "HTML published_at"),
                     url=canonical_url,
@@ -978,7 +981,12 @@ class HtmlConnectorAdapter:
                 messages.append(
                     SourceMessage(
                         source=self.source_id,
-                        external_id=f"comment:{_stable_external_id(self.source_id, canonical_url, comment_id)}",
+                        external_id=(
+                            "comment:"
+                            + _stable_external_id(
+                                self.source_id, canonical_url, comment_id
+                            )
+                        ),
                         text=comment_text,
                         published_at=_timestamp(
                             comment_published, "HTML comment published_at"
@@ -1042,7 +1050,10 @@ class HtmlConnectorAdapter:
             messages.append(
                 SourceMessage(
                     source=self.source_id,
-                    external_id=f"feed:{_stable_external_id(self.source_id, item_url, str(index))}",
+                    external_id=(
+                        "feed:"
+                        + _stable_external_id(self.source_id, item_url, str(index))
+                    ),
                     text=f"{title}. {description}" if title else description,
                     published_at=_timestamp(published, "feed published_at"),
                     url=item_url,
@@ -1080,7 +1091,10 @@ class HtmlConnectorAdapter:
         response = services.transport.get(
             url,
             headers={
-                "Accept": "text/html, application/rss+xml, application/atom+xml, application/xml;q=0.9"
+                "Accept": (
+                    "text/html, application/rss+xml, "
+                    "application/atom+xml, application/xml;q=0.9"
+                )
             },
         )
         content_type = (response.content_type or "").split(";", 1)[0].strip().lower()
