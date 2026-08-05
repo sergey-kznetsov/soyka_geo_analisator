@@ -127,6 +127,24 @@ def test_same_source_external_id_is_a_technical_duplicate() -> None:
     assert result.stats.included_for_analysis == 1
 
 
+def test_same_identity_remains_technical_after_recurrence_interval() -> None:
+    result = preprocess_messages(
+        (
+            message("same", "Снова не работает фонарь"),
+            message(
+                "same",
+                "Снова не работает фонарь",
+                published_at=NOW + timedelta(days=2),
+            ),
+        )
+    )
+
+    duplicate = result.messages[1]
+    assert duplicate.duplicate.kind is DuplicateKind.TECHNICAL_DUPLICATE
+    assert duplicate.duplicate.reasons == ("same_source_external_id",)
+    assert not duplicate.duplicate.included_for_analysis
+
+
 def test_cross_source_repost_is_preserved_but_excluded_from_analysis() -> None:
     result = preprocess_messages(
         (
@@ -145,6 +163,25 @@ def test_cross_source_repost_is_preserved_but_excluded_from_analysis() -> None:
     assert repost.original_text == "На улице ремонтируют освещение"
     assert not repost.duplicate.included_for_analysis
     assert result.stats.cross_source_reposts == 1
+
+
+def test_cross_source_marker_does_not_turn_repost_into_repeated_appeal() -> None:
+    result = preprocess_messages(
+        (
+            message("vk-1", "Снова не работает освещение", source="vk"),
+            message(
+                "ok-1",
+                "Снова не работает освещение",
+                source="ok",
+                published_at=NOW + timedelta(days=2),
+            ),
+        )
+    )
+
+    repost = result.messages[1]
+    assert repost.duplicate.kind is DuplicateKind.CROSS_SOURCE_REPOST
+    assert repost.duplicate.reasons == ("same_model_text", "different_source")
+    assert not repost.duplicate.included_for_analysis
 
 
 def test_repeated_appeal_remains_an_independent_observation() -> None:
