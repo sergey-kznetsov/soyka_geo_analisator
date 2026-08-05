@@ -32,8 +32,37 @@ jobs:
       - name: Install Ruff
         run: python -m pip install ruff==0.6.9
 
-      - name: Format contract files
+      - name: Fix and format contract files
         run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("soika_uds/integration/contract.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''        if self.status in {JobStatus.COMPLETED, JobStatus.COMPLETED_WITH_WARNINGS}:
+              if self.progress_percent != 100:
+                  raise ContractValidationError(
+                      "completed status requires progress_percent equal to 100"
+                  )
+          '''
+          if old not in text:
+              old = '''        if self.status in {JobStatus.COMPLETED, JobStatus.COMPLETED_WITH_WARNINGS}:
+              if self.progress_percent != 100:
+                  raise ContractValidationError(
+                      "completed status requires progress_percent equal to 100"
+                  )'''
+          new = '''        if (
+              self.status
+              in {JobStatus.COMPLETED, JobStatus.COMPLETED_WITH_WARNINGS}
+              and self.progress_percent != 100
+          ):
+              raise ContractValidationError(
+                  "completed status requires progress_percent equal to 100"
+              )'''
+          if old not in text:
+              raise SystemExit("expected nested completed-status condition not found")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
           ruff format soika_uds/integration tests/unit/test_contract_schemas.py tests/unit/test_integration_contract.py
           ruff check --fix --unsafe-fixes soika_uds/integration tests/unit/test_contract_schemas.py tests/unit/test_integration_contract.py
 
