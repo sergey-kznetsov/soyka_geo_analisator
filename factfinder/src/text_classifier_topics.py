@@ -1,42 +1,34 @@
-import pandas as pd
-from transformers import pipeline
+"""Classifier of citizens' messages by detailed urban topic."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ._classifier_base import BaseTextClassifier, PipelineFactory
 
 
-class TextClassifierTopics:
-    """
-    This class is aimed to classify input texts into themes, or structured types of events. It uses a Huggingface transformer model trained on rubert-tiny.
-    In many cases count of messages per theme was too low to efficiently train, so we used synthetic themes based on the categories as upper level (for example, 'unknown_ЖКХ')
-    """
+class TextClassifierTopics(BaseTextClassifier):
+    """Classify text into the detailed themes used by SOIKA."""
+
+    DEFAULT_REPOSITORY_ID = "Sandrro/text_to_subfunction_v10"
 
     def __init__(
         self,
-        repository_id="Sandrro/text_to_subfunction_v10",
-        number_of_categories=1,
-        device_type=None,
-    ):
-        self.REP_ID = repository_id
-        self.CATS_NUM = number_of_categories
-        self.classifier = pipeline(
-            "text-classification",
-            model=self.REP_ID,
-            tokenizer="cointegrated/rubert-tiny2",
-            max_length=2048,
-            truncation=True,
-            device=device_type,
+        repository_id: str = DEFAULT_REPOSITORY_ID,
+        number_of_categories: int = 1,
+        device_type: Any = None,
+        *,
+        tokenizer_id: str = BaseTextClassifier.DEFAULT_TOKENIZER_ID,
+        model_revision: str | None = None,
+        pipeline_factory: PipelineFactory | None = None,
+        max_length: int = 2048,
+    ) -> None:
+        super().__init__(
+            repository_id=repository_id,
+            number_of_categories=number_of_categories,
+            device_type=device_type,
+            tokenizer_id=tokenizer_id,
+            model_revision=model_revision,
+            pipeline_factory=pipeline_factory,
+            max_length=max_length,
         )
-
-    def run(self, t):
-        """
-        This method takes a text as input and returns the predicted themes and probabilities.
-        :param t: text to classify
-        :return: list of predicted themes and probabilities
-        """
-        preds = pd.DataFrame(self.classifier(t, top_k=self.CATS_NUM))
-        self.classifier.call_count = 0
-        if self.CATS_NUM > 1:
-            cats = "; ".join(preds["label"].tolist())
-            probs = "; ".join(preds["score"].round(3).astype(str).tolist())
-        else:
-            cats = preds["label"][0]
-            probs = preds["score"].round(3).astype(str)[0]
-        return [cats, probs]
