@@ -120,9 +120,13 @@ class HtmlSourceProfile:
     enabled: bool = False
 
     def __post_init__(self) -> None:
+        if not isinstance(self.kind, HtmlSourceKind):
+            object.__setattr__(self, "kind", HtmlSourceKind(self.kind))
         source_id = _required(self.source_id, "source_id").lower()
         required_prefix = (
-            "local-media." if self.kind is HtmlSourceKind.LOCAL_MEDIA else "municipal."
+            "local-media."
+            if self.kind is HtmlSourceKind.LOCAL_MEDIA
+            else "municipal."
         )
         if not source_id.startswith(required_prefix):
             raise ConnectorDefinitionError(
@@ -134,8 +138,6 @@ class HtmlSourceProfile:
             "display_name",
             _required(self.display_name, "display_name"),
         )
-        if not isinstance(self.kind, HtmlSourceKind):
-            object.__setattr__(self, "kind", HtmlSourceKind(self.kind))
         base_url, base_host = _https_url(self.base_url, "base_url")
         object.__setattr__(self, "base_url", base_url)
         object.__setattr__(self, "region", _required(self.region, "region"))
