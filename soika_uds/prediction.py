@@ -35,7 +35,7 @@ def _unwrap_pipeline_payload(payload: Any) -> Sequence[Mapping[str, Any]]:
     if isinstance(payload, Mapping):
         return [payload]
 
-    if not isinstance(payload, Sequence) or isinstance(payload, (str, bytes)):
+    if not isinstance(payload, Sequence) or isinstance(payload, str | bytes):
         raise PredictionFormatError(
             f"unsupported classifier output type: {type(payload).__name__}"
         )
@@ -50,7 +50,7 @@ def _unwrap_pipeline_payload(payload: Any) -> Sequence[Mapping[str, Any]]:
     if (
         len(payload) == 1
         and isinstance(first, Sequence)
-        and not isinstance(first, (str, bytes))
+        and not isinstance(first, str | bytes)
         and all(isinstance(item, Mapping) for item in first)
     ):
         return first  # type: ignore[return-value]
