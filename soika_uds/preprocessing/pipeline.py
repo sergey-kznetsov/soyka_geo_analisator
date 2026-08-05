@@ -34,6 +34,19 @@ _QUOTE_LINE_RE = re.compile(r"^\s*(?:>|»|цитата:|quote:)\s*(.+)$", re.IGN
 _CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
 _TOKEN_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё]+", re.UNICODE)
+_NUMBER_WORDS = {
+    "ноль": "0",
+    "один": "1",
+    "два": "2",
+    "три": "3",
+    "четыре": "4",
+    "пять": "5",
+    "шесть": "6",
+    "семь": "7",
+    "восемь": "8",
+    "девять": "9",
+    "десять": "10",
+}
 
 
 class SourceMessageLike(Protocol):
@@ -131,7 +144,9 @@ def detect_language(value: str) -> LanguageCode:
 
 def semantic_text(value: str) -> str:
     normalized = normalize_unicode(value).casefold().replace("ё", "е")
-    return " ".join(_TOKEN_RE.findall(normalized))
+    normalized = re.sub(r"\bno(?=\d)", "", normalized)
+    tokens = _TOKEN_RE.findall(normalized)
+    return " ".join(_NUMBER_WORDS.get(token, token) for token in tokens)
 
 
 def token_signature(value: str) -> tuple[str, ...]:
