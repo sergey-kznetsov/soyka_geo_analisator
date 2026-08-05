@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soika-uds.dev/1.0.0/common.schema.json",
+  "title": "SOIKA UDS Development contract common definitions",
+  "$defs": {
+    "contractVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "analysisId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "awareDateTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude", "longitude"],
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
+      }
+    },
+    "territoryGeometry": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["Polygon", "MultiPolygon", "Feature"]
+        }
+      }
+    },
+    "territory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["city"],
+      "properties": {
+        "city": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "point": {
+          "$ref": "#/$defs/point"
+        },
+        "radius_meters": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "geometry": {
+          "$ref": "#/$defs/territoryGeometry"
+        }
+      },
+      "anyOf": [
+        {"required": ["address"]},
+        {"required": ["point"]},
+        {"required": ["geometry"]}
+      ]
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date"
+        },
+        "to": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "stage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "details": {
+          "type": "object"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sources_requested",
+        "sources_available",
+        "messages_collected",
+        "messages_relevant",
+        "messages_geocoded",
+        "messages_low_confidence"
+      ],
+      "properties": {
+        "sources_requested": {"type": "integer", "minimum": 0},
+        "sources_available": {"type": "integer", "minimum": 0},
+        "messages_collected": {"type": "integer", "minimum": 0},
+        "messages_relevant": {"type": "integer", "minimum": 0},
+        "messages_geocoded": {"type": "integer", "minimum": 0},
+        "messages_low_confidence": {"type": "integer", "minimum": 0}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "soika_version",
+        "schema_digest",
+        "models",
+        "algorithms"
+      ],
+      "properties": {
+        "soika_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "schema_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "algorithms": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "featureCollection": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type", "features"],
+      "properties": {
+        "type": {"const": "FeatureCollection"},
+        "features": {
+          "type": "array",
+          "items": {"type": "object"}
+        }
+      }
+    },
+    "objectArray": {
+      "type": "array",
+      "items": {"type": "object"}
+    }
+  }
+}
