@@ -1,0 +1,48 @@
+name: soika-uds-development
+
+x-soika-common: &soika-common
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  volumes:
+    - soika-data:/var/lib/soika
+    - soika-models:/var/cache/soika/models
+  environment:
+    SOIKA_DATA_DIR: /var/lib/soika
+    SOIKA_MODEL_DIR: /var/cache/soika/models
+  ports:
+    - "${SOIKA_BIND_ADDRESS:-127.0.0.1}:${SOIKA_PORT:-18080}:8080"
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  soika-cpu:
+    <<: *soika-common
+    profiles: ["cpu"]
+    build:
+      context: .
+      target: cpu
+    image: soika-uds-development:cpu
+
+  soika-gpu:
+    <<: *soika-common
+    profiles: ["gpu"]
+    build:
+      context: .
+      target: gpu
+    image: soika-uds-development:gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  soika-data:
+  soika-models:

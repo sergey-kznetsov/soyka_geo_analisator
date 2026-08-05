@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -36,7 +36,7 @@ def test_source_message_is_source_independent():
         source="portal",
         external_id="42",
         text="На улице яма",
-        published_at=datetime(2026, 8, 5, tzinfo=timezone.utc),
+        published_at=datetime(2026, 8, 5, tzinfo=UTC),
     )
 
     assert message.source == "portal"
