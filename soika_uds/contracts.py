@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from enum import StrEnum
+from enum import Enum
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 from .prediction import Prediction
 
 
-class JobStatus(StrEnum):
+class JobStatus(str, Enum):
     QUEUED = "queued"
     PREPARING = "preparing"
     COLLECTING = "collecting"
@@ -27,7 +28,7 @@ class JobStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
-class PrecisionLevel(StrEnum):
+class PrecisionLevel(str, Enum):
     BUILDING = "building"
     STREET = "street"
     INTERSECTION = "intersection"
@@ -72,7 +73,11 @@ class TerritoryContext:
     options: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "analysis_id", _clean_required(self.analysis_id, "analysis_id"))
+        object.__setattr__(
+            self,
+            "analysis_id",
+            _clean_required(self.analysis_id, "analysis_id"),
+        )
         object.__setattr__(self, "city", _clean_required(self.city, "city"))
 
         if self.address is not None:
@@ -191,7 +196,19 @@ class AnalysisResult:
     payload: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "analysis_id", _clean_required(self.analysis_id, "analysis_id"))
-        object.__setattr__(self, "warnings", tuple(item.strip() for item in self.warnings if item.strip()))
-        object.__setattr__(self, "errors", tuple(item.strip() for item in self.errors if item.strip()))
+        object.__setattr__(
+            self,
+            "analysis_id",
+            _clean_required(self.analysis_id, "analysis_id"),
+        )
+        object.__setattr__(
+            self,
+            "warnings",
+            tuple(item.strip() for item in self.warnings if item.strip()),
+        )
+        object.__setattr__(
+            self,
+            "errors",
+            tuple(item.strip() for item in self.errors if item.strip()),
+        )
         object.__setattr__(self, "payload", MappingProxyType(dict(self.payload)))
