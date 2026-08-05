@@ -52,13 +52,9 @@ jobs:
   dependency-lock:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - uses: actions/setup-python@v5
         with:
@@ -68,37 +64,12 @@ jobs:
       - name: Install Poetry
         run: python -m pip install --upgrade pip poetry==2.4.1
 
-      - name: Resolve dependency lock
-        run: poetry lock
-
-      - name: Validate project metadata
-        run: poetry check
-
-      - name: Upload resolved lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: poetry-lock
-          path: poetry.lock
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Commit initial lock on environment branch
-        if: >-
-          (github.event_name == 'push' &&
-           github.ref_name == 'agent/python311-server-environment') ||
-          (github.event_name == 'pull_request' &&
-           github.head_ref == 'agent/python311-server-environment')
+      - name: Validate committed dependency lock
         run: |
-          if ! git ls-files --error-unmatch poetry.lock >/dev/null 2>&1; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add poetry.lock
-            git commit -m "Lock Python 3.11 dependencies"
-            git push origin HEAD:agent/python311-server-environment
-          fi
-
-      - name: Verify committed lock is current
-        run: test -z "$(git status --porcelain -- poetry.lock)"
+          test -f poetry.lock
+          poetry check --lock
+          poetry lock
+          git diff --exit-code -- poetry.lock
 
   docker-environment:
     runs-on: ubuntu-latest
@@ -107,25 +78,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect committed lock
-        id: lock
-        run: |
-          if test -f poetry.lock; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Build CPU image
-        if: steps.lock.outputs.present == 'true'
         run: docker build --target cpu --tag soika-uds:cpu .
 
       - name: Start CPU environment
-        if: steps.lock.outputs.present == 'true'
         run: docker run --detach --name soika-cpu --publish 18080:8080 soika-uds:cpu
 
       - name: Validate health and readiness
-        if: steps.lock.outputs.present == 'true'
         run: |
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null \
@@ -138,9 +97,8 @@ jobs:
           exit 1
 
       - name: Build GPU image
-        if: steps.lock.outputs.present == 'true'
         run: docker build --target gpu --tag soika-uds:gpu .
 
       - name: Stop test container
-        if: always() && steps.lock.outputs.present == 'true'
+        if: always()
         run: docker rm --force soika-cpu || true
