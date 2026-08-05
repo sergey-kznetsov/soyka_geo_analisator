@@ -99,7 +99,9 @@ class PreprocessingStageHandler:
             warnings = (
                 ContractIssue(
                     code="PREPROCESSING_MESSAGES_REJECTED",
-                    message="some collected messages were rejected during preprocessing",
+                    message=(
+                        "some collected messages were rejected during preprocessing"
+                    ),
                     retryable=False,
                     stage=PipelineStage.PREPROCESSING.value,
                     details={"count": result.stats.rejected},
