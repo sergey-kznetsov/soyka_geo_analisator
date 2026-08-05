@@ -82,20 +82,31 @@ jobs:
         run: git diff --exit-code -- poetry.lock
 
   docker-environment:
-    if: ${{ hashFiles('poetry.lock') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect committed lock
+        id: lock
+        run: |
+          if test -f poetry.lock; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build CPU image
+        if: steps.lock.outputs.present == 'true'
         run: docker build --target cpu --tag soika-uds:cpu .
 
       - name: Start CPU environment
+        if: steps.lock.outputs.present == 'true'
         run: docker run --detach --name soika-cpu --publish 18080:8080 soika-uds:cpu
 
       - name: Validate health and readiness
+        if: steps.lock.outputs.present == 'true'
         run: |
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null \
@@ -108,8 +119,9 @@ jobs:
           exit 1
 
       - name: Build GPU image
+        if: steps.lock.outputs.present == 'true'
         run: docker build --target gpu --tag soika-uds:gpu .
 
       - name: Stop test container
-        if: always()
+        if: always() && steps.lock.outputs.present == 'true'
         run: docker rm --force soika-cpu || true
