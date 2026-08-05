@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://soika.invalid/schemas/connectors/connector-definition-v1.schema.json",
+  "title": "SOIKA prepared connector definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_id",
+    "display_name",
+    "family",
+    "access_modes",
+    "capabilities",
+    "checkpoint_fields",
+    "options",
+    "cost_model",
+    "policy_template",
+    "jurisdictions",
+    "allowed_domains",
+    "requires_site_profile",
+    "customer_supplied_credentials",
+    "paid_fallback_allowed",
+    "lifecycle",
+    "network_enabled",
+    "notes",
+    "metadata"
+  ],
+  "properties": {
+    "source_id": {"type": "string", "pattern": "^[a-z][a-z0-9.-]{1,63}$"},
+    "display_name": {"type": "string", "minLength": 1},
+    "family": {
+      "enum": ["social_network", "local_media", "municipal", "video_platform", "community_platform"]
+    },
+    "access_modes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["official_api", "public_html", "rss_atom", "sitemap", "partner_export"]}
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "documents", "comments", "replies", "edit_markers", "deletion_markers",
+          "search", "geo_tags", "attachments", "rss_discovery", "sitemap_discovery",
+          "html_discovery", "partner_export"
+        ]
+      }
+    },
+    "checkpoint_fields": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/checkpoint"}
+    },
+    "options": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/option"}
+    },
+    "cost_model": {"enum": ["free_public", "free_official_api", "partner_export", "optional_paid"]},
+    "policy_template": {"type": "string", "minLength": 1},
+    "jurisdictions": {"const": ["RU"]},
+    "allowed_domains": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 3}
+    },
+    "requires_site_profile": {"type": "boolean"},
+    "customer_supplied_credentials": {"type": "boolean"},
+    "paid_fallback_allowed": {"const": false},
+    "lifecycle": {"enum": ["prepared", "review_required", "blocked", "ready_for_integration"]},
+    "network_enabled": {"type": "boolean"},
+    "notes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "metadata": {"type": "object"}
+  },
+  "$defs": {
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "required", "description"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "kind": {"enum": ["string", "integer", "boolean", "string_array", "object"]},
+        "required": {"type": "boolean"},
+        "description": {"type": "string", "minLength": 1}
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "required", "description"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "kind": {"enum": ["cursor", "offset", "page", "timestamp", "url"]},
+        "required": {"type": "boolean"},
+        "description": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
