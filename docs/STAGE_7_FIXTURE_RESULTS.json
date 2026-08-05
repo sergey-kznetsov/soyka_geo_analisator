@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "result_kind": "stage7_preprocessing_fixture_integration",
+  "generated_at": "2026-08-05T15:48:00Z",
+  "package_version": "0.9.0",
+  "input_sources": [
+    "vk",
+    "ok",
+    "local-media",
+    "municipal-public",
+    "dzen",
+    "pikabu",
+    "rutube"
+  ],
+  "input_messages": 7,
+  "output_messages": 7,
+  "unique_count": 7,
+  "exact_duplicate_count": 0,
+  "near_duplicate_count": 0,
+  "raw_text_preserved_for_all": true,
+  "normalized_text_present_for_all": true,
+  "transformation_trace_present_for_all": true,
+  "timestamps_normalized_to_utc": true,
+  "sources": {
+    "vk": {
+      "external_id": "post:-1:10",
+      "raw_text": "На улице Центральной ремонтируют освещение",
+      "normalized_text": "На улице Центральной ремонтируют освещение",
+      "language": "ru",
+      "duplicate_kind": "unique"
+    },
+    "ok": {
+      "external_id": "comment:GROUP_TOPIC:1:ok-1",
+      "raw_text": "Остановка у школы требует ремонта",
+      "normalized_text": "Остановка у школы требует ремонта",
+      "language": "ru",
+      "duplicate_kind": "unique"
+    },
+    "local-media": {
+      "external_id": "feed:1",
+      "raw_text": "<p>Начался ремонт дороги возле жилого квартала</p>",
+      "normalized_text": "Начался ремонт дороги возле жилого квартала",
+      "language": "ru",
+      "duplicate_kind": "unique"
+    },
+    "municipal-public": {
+      "external_id": "document:1",
+      "raw_text": "Муниципалитет сообщил о ремонте тротуара",
+      "normalized_text": "Муниципалитет сообщил о ремонте тротуара",
+      "language": "ru",
+      "duplicate_kind": "unique"
+    },
+    "dzen": {
+      "external_id": "document:2",
+      "raw_text": "Жители обсудили благоустройство сквера",
+      "normalized_text": "Жители обсудили благоустройство сквера",
+      "language": "ru",
+      "duplicate_kind": "unique"
+    },
+    "pikabu": {
+      "external_id": "document:3",
+      "raw_text": "Пользователи сообщили о яме на дороге",
+      "normalized_text": "Пользователи сообщили о яме на дороге",
+      "language": "ru",
+      "duplicate_kind": "unique"
+    },
+    "rutube": {
+      "external_id": "document:4",
+      "raw_text": "Видео о ремонте городской набережной",
+      "normalized_text": "Видео о ремонте городской набережной",
+      "language": "ru",
+      "duplicate_kind": "unique"
+    }
+  }
+}
