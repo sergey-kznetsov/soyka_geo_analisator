@@ -22,6 +22,7 @@ from .integration import (
     export_schema_bundle,
 )
 from .model_registry import install_models, lock_manifest, verify_models
+from .orchestration import FileJobStore, OrchestrationError, SoikaOrchestrator
 from .probes import serve_probes
 
 
@@ -55,6 +56,33 @@ def _add_contract_commands(subparsers: argparse._SubParsersAction) -> None:
         required=True,
     )
     validate.add_argument("--input", type=Path, required=True)
+
+
+def _default_job_state_dir() -> Path:
+    return Path(os.getenv("SOIKA_DATA_DIR", "/var/lib/soika")) / "jobs"
+
+
+def _add_job_commands(subparsers: argparse._SubParsersAction) -> None:
+    jobs = subparsers.add_parser(
+        "jobs",
+        help="inspect and control durable orchestration jobs",
+    )
+    jobs.add_argument(
+        "--state-dir",
+        type=Path,
+        default=_default_job_state_dir(),
+        help="directory containing durable orchestration state",
+    )
+    commands = jobs.add_subparsers(dest="jobs_command", required=True)
+    commands.add_parser("list", help="list persisted jobs")
+
+    for name, help_text in (
+        ("status", "print one persisted job status"),
+        ("cancel", "request cancellation of one job"),
+        ("retry", "reset a failed job for explicit retry"),
+    ):
+        command = commands.add_parser(name, help=help_text)
+        command.add_argument("--analysis-id", required=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -117,6 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--strict", action="store_true")
 
     _add_contract_commands(subparsers)
+    _add_job_commands(subparsers)
     return parser
 
 
@@ -146,6 +175,37 @@ def _validate_contract_document(kind: str, path: Path) -> dict[str, Any]:
     if kind == "result":
         return AnalysisResultV1.from_dict(payload).to_dict()
     raise ContractValidationError(f"unsupported contract kind: {kind}")
+
+
+def _job_summary(record) -> dict[str, Any]:
+    return {
+        "analysis_id": record.analysis_id,
+        "status": record.status.value,
+        "stage": record.current_stage.value if record.current_stage else None,
+        "progress_percent": record.progress_percent,
+        "job_attempt": record.job_attempt,
+        "revision": record.revision,
+        "updated_at": record.updated_at.isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _run_job_command(args) -> int:
+    orchestrator = SoikaOrchestrator(FileJobStore(args.state_dir), {})
+    if args.jobs_command == "list":
+        _print([_job_summary(record) for record in orchestrator.list_jobs()])
+        return 0
+    if args.jobs_command == "status":
+        _print(orchestrator.status(args.analysis_id).to_dict())
+        return 0
+    if args.jobs_command == "cancel":
+        record = orchestrator.request_cancel(args.analysis_id)
+        _print(record.to_status().to_dict())
+        return 0
+    if args.jobs_command == "retry":
+        record = orchestrator.retry_failed(args.analysis_id)
+        _print(record.to_status().to_dict())
+        return 0
+    raise OrchestrationError(f"unsupported jobs command: {args.jobs_command}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -201,6 +261,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 normalized = _validate_contract_document(args.kind, args.input)
                 _print({"valid": True, "document": normalized})
                 return 0
+
+        if args.command == "jobs":
+            return _run_job_command(args)
     except ContractValidationError as error:
         _print(
             {
@@ -213,5 +276,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             stream=sys.stderr,
         )
         return 2
+    except OrchestrationError as error:
+        _print(
+            {
+                "ok": False,
+                "error": {
+                    "code": "ORCHESTRATION_ERROR",
+                    "message": str(error),
+                },
+            },
+            stream=sys.stderr,
+        )
+        return 3
 
     raise RuntimeError(f"unsupported command: {args.command}")
