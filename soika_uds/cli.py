@@ -51,14 +51,20 @@ def build_parser() -> argparse.ArgumentParser:
     probes.add_argument("--port", type=int, default=8080)
     _add_repository_root(probes)
 
-    models = subparsers.add_parser("models", help="manage reproducible ML model files")
+    models = subparsers.add_parser("models", help="manage reproducible ML models")
     model_commands = models.add_subparsers(dest="models_command", required=True)
 
-    lock = model_commands.add_parser("lock", help="resolve mutable model refs to commit SHAs")
+    lock = model_commands.add_parser(
+        "lock",
+        help="resolve mutable model refs to commit SHAs",
+    )
     lock.add_argument("--manifest", type=Path, default=None)
     lock.add_argument("--output", type=Path, required=True)
 
-    install = model_commands.add_parser("install", help="download a locked model manifest")
+    install = model_commands.add_parser(
+        "install",
+        help="download a locked model manifest",
+    )
     install.add_argument("--manifest", type=Path, required=True)
     install.add_argument(
         "--destination",
@@ -66,7 +72,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(os.getenv("SOIKA_MODEL_DIR", "/var/cache/soika/models")),
     )
 
-    verify = model_commands.add_parser("verify", help="verify installed model checksums")
+    verify = model_commands.add_parser(
+        "verify",
+        help="verify installed model checksums",
+    )
     verify.add_argument(
         "--destination",
         type=Path,
@@ -106,12 +115,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             _print(lock_manifest(args.manifest, args.output))
             return 0
         if args.models_command == "install":
-            _print(
-                [
-                    asdict(item)
-                    for item in install_models(args.manifest, args.destination)
-                ]
-            )
+            installed = install_models(args.manifest, args.destination)
+            _print([asdict(item) for item in installed])
             return 0
         if args.models_command == "verify":
             payload = verify_models(args.destination)
