@@ -96,7 +96,8 @@ def test_youtube_is_not_in_russian_connector_perimeter() -> None:
 
 def test_all_prepared_connectors_are_ru_only() -> None:
     assert all(
-        item.jurisdictions == ("RU",) for item in prepared_connector_definitions()
+        item.jurisdictions == ("RU",)
+        for item in prepared_connector_definitions()
     )
 
 
@@ -195,6 +196,15 @@ def test_html_profile_is_disabled_and_ru_scoped_by_configuration() -> None:
     assert profile.enabled is False
     assert profile.region == "Республика Татарстан"
     assert profile.municipalities == ("Казань",)
+
+
+def test_html_profile_accepts_string_enum_values() -> None:
+    profile = _html_profile(
+        kind="local_media",
+        discovery_mode="sitemap",
+    )
+    assert profile.kind is HtmlSourceKind.LOCAL_MEDIA
+    assert profile.discovery_mode is DiscoveryMode.SITEMAP
 
 
 def test_html_profile_rejects_http() -> None:
