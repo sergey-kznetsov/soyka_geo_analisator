@@ -2,10 +2,10 @@ import json
 from pathlib import Path
 
 from soika_uds.integration import (
+    SCHEMA_FILES,
     AnalysisRequestV1,
     AnalysisResultV1,
     JobStatusV1,
-    SCHEMA_FILES,
     contract_info,
     export_schema_bundle,
     load_schema_bundle,
@@ -45,18 +45,17 @@ def test_exported_schema_bundle_matches_packaged_bundle(tmp_path):
 
     assert [path.name for path in exported] == list(SCHEMA_FILES)
     for path in exported:
-        assert json.loads(path.read_text(encoding="utf-8")) == load_schema_bundle()[
-            path.name
-        ]
+        assert (
+            json.loads(path.read_text(encoding="utf-8"))
+            == load_schema_bundle()[path.name]
+        )
 
 
 def test_documented_examples_are_accepted_by_python_contract():
     request = json.loads(
         (EXAMPLE_ROOT / "analysis-request.json").read_text(encoding="utf-8")
     )
-    status = json.loads(
-        (EXAMPLE_ROOT / "job-status.json").read_text(encoding="utf-8")
-    )
+    status = json.loads((EXAMPLE_ROOT / "job-status.json").read_text(encoding="utf-8"))
     result = json.loads(
         (EXAMPLE_ROOT / "analysis-result.json").read_text(encoding="utf-8")
     )

@@ -154,7 +154,7 @@ def _parse_date(value: object, field_name: str) -> date:
 
 
 def _json_value(value: object, field_name: str) -> Any:
-    if value is None or isinstance(value, (str, bool, int)):
+    if value is None or isinstance(value, str | bool | int):
         return value
     if isinstance(value, float):
         if not math.isfinite(value):
@@ -167,7 +167,7 @@ def _json_value(value: object, field_name: str) -> Any:
                 raise ContractValidationError(f"{field_name} keys must be strings")
             normalized[key] = _json_value(item, f"{field_name}.{key}")
         return normalized
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return [
             _json_value(item, f"{field_name}[{index}]")
             for index, item in enumerate(value)
@@ -363,7 +363,10 @@ class AnalysisRequestV1:
             "options": dict(self.options),
             "allow_partial": self.allow_partial,
         }
-        if self.territory.period_from is not None or self.territory.period_to is not None:
+        if (
+            self.territory.period_from is not None
+            or self.territory.period_to is not None
+        ):
             period: dict[str, str] = {}
             if self.territory.period_from is not None:
                 period["from"] = self.territory.period_from.isoformat()
@@ -404,9 +407,7 @@ class AnalysisRequestV1:
             raise ContractValidationError(
                 f"message_type must be {cls.message_type.value}"
             )
-        contract_version = ensure_supported_contract_version(
-            data["contract_version"]
-        )
+        contract_version = ensure_supported_contract_version(data["contract_version"])
         analysis_id = _clean_required(data["analysis_id"], "analysis_id")
 
         territory_data = _as_mapping(data["territory"], "territory")
@@ -550,14 +551,14 @@ class JobStatusV1:
             and self.total_items is not None
             and self.processed_items > self.total_items
         ):
+            raise ContractValidationError("processed_items cannot exceed total_items")
+        if (
+            self.status in {JobStatus.COMPLETED, JobStatus.COMPLETED_WITH_WARNINGS}
+            and self.progress_percent != 100
+        ):
             raise ContractValidationError(
-                "processed_items cannot exceed total_items"
+                "completed status requires progress_percent equal to 100"
             )
-        if self.status in {JobStatus.COMPLETED, JobStatus.COMPLETED_WITH_WARNINGS}:
-            if self.progress_percent != 100:
-                raise ContractValidationError(
-                    "completed status requires progress_percent equal to 100"
-                )
         if self.status is JobStatus.FAILED and not self.errors:
             raise ContractValidationError("failed status requires at least one error")
 
@@ -876,7 +877,9 @@ class AnalysisResultV1:
             "coverage",
             "provenance",
         }
-        _strict_keys(data, allowed=allowed, required=required, context="analysis result")
+        _strict_keys(
+            data, allowed=allowed, required=required, context="analysis result"
+        )
         if data["message_type"] != cls.message_type.value:
             raise ContractValidationError(
                 f"message_type must be {cls.message_type.value}"
@@ -895,9 +898,7 @@ class AnalysisResultV1:
             provenance=ResultProvenance.from_dict(
                 _as_mapping(data["provenance"], "provenance")
             ),
-            coverage=_coverage_from_dict(
-                _as_mapping(data["coverage"], "coverage")
-            ),
+            coverage=_coverage_from_dict(_as_mapping(data["coverage"], "coverage")),
             categories=_mapping_tuple(data.get("categories", []), "categories"),
             topics=_mapping_tuple(data.get("topics", []), "topics"),
             events=_mapping_tuple(data.get("events", []), "events"),
