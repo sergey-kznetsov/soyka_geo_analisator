@@ -74,8 +74,20 @@ from .parsers import (
     SourceResearchRecord,
 )
 from .prediction import Prediction, PredictionFormatError
+from .preprocessing import (
+    DuplicateDetector,
+    DuplicateKind,
+    LanguageCode,
+    MessagePreprocessor,
+    PreprocessedMessage,
+    PreprocessingBatchResult,
+    PreprocessingConfig,
+    PreprocessingError,
+    PreprocessingPipeline,
+    TransformationStep,
+)
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
@@ -98,6 +110,8 @@ __all__ = [
     "CoverageSummary",
     "DataCategory",
     "DataProtectionPolicy",
+    "DuplicateDetector",
+    "DuplicateKind",
     "FileJobStore",
     "FileParserCheckpointStore",
     "IdempotencyConflictError",
@@ -108,7 +122,9 @@ __all__ = [
     "JobRecord",
     "JobStatus",
     "JobStatusV1",
+    "LanguageCode",
     "MessageClassification",
+    "MessagePreprocessor",
     "MessageType",
     "MissingStageHandlerError",
     "ModelResult",
@@ -126,6 +142,11 @@ __all__ = [
     "PrecisionLevel",
     "Prediction",
     "PredictionFormatError",
+    "PreprocessedMessage",
+    "PreprocessingBatchResult",
+    "PreprocessingConfig",
+    "PreprocessingError",
+    "PreprocessingPipeline",
     "ResultProvenance",
     "RetryPolicy",
     "RetryableStageError",
@@ -140,6 +161,7 @@ __all__ = [
     "StageExecutionError",
     "StageResult",
     "TerritoryContext",
+    "TransformationStep",
     "assert_idempotent_request",
     "contract_info",
     "export_schema_bundle",
