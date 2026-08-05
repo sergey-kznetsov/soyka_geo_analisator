@@ -14,7 +14,9 @@ permissions:
 
 jobs:
   format-contract:
-    if: github.ref == 'refs/heads/agent/versioned-soika-contract-v1'
+    if: >-
+      github.ref == 'refs/heads/agent/versioned-soika-contract-v1' ||
+      github.head_ref == 'agent/versioned-soika-contract-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
