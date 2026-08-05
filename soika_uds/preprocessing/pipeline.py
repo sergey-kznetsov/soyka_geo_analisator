@@ -60,7 +60,11 @@ class PreprocessingConfig:
             self.min_near_duplicate_tokens < 1
         ):
             raise PreprocessingError("min_near_duplicate_tokens must be positive")
-        if type(self.repeat_window_seconds) is not int or self.repeat_window_seconds < 0:
+        invalid_window = (
+            type(self.repeat_window_seconds) is not int
+            or self.repeat_window_seconds < 0
+        )
+        if invalid_window:
             raise PreprocessingError("repeat_window_seconds must be non-negative")
 
 
@@ -154,6 +158,15 @@ def normalize_timestamp(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+def _inside_window(
+    current: PreprocessedMessage,
+    candidate: PreprocessedMessage,
+    window_seconds: int,
+) -> bool:
+    delta = abs((current.published_at - candidate.published_at).total_seconds())
+    return delta <= window_seconds
+
+
 class MessagePreprocessor:
     def __init__(self, config: PreprocessingConfig | None = None) -> None:
         self._config = config or PreprocessingConfig()
@@ -182,12 +195,15 @@ class MessagePreprocessor:
 
         author_text, quotes = split_quotes(current)
         steps.append(
-            _step("quote_extraction", current, author_text, quotes_extracted=len(quotes))
+            _step(
+                "quote_extraction",
+                current,
+                author_text,
+                quotes_extracted=len(quotes),
+            )
         )
         normalized_text = current.strip()
         fingerprint_text = semantic_text(author_text or normalized_text)
-        content_sha256 = _digest(normalized_text)
-        semantic_fingerprint = _digest(fingerprint_text)
 
         return PreprocessedMessage(
             source=message.source,
@@ -201,8 +217,8 @@ class MessagePreprocessor:
             url=getattr(message, "url", None),
             author_id=getattr(message, "author_id", None),
             metadata=dict(getattr(message, "metadata", {})),
-            content_sha256=content_sha256,
-            semantic_fingerprint=semantic_fingerprint,
+            content_sha256=_digest(normalized_text),
+            semantic_fingerprint=_digest(fingerprint_text),
             transformations=tuple(steps),
         )
 
@@ -219,12 +235,26 @@ class DuplicateDetector:
             key=lambda item: (item.published_at, item.source, item.external_id),
         )
         accepted: list[PreprocessedMessage] = []
-        exact_index: dict[str, PreprocessedMessage] = {}
+        exact_index: dict[str, list[PreprocessedMessage]] = {}
         exact_count = 0
         near_count = 0
 
         for message in ordered:
-            exact = exact_index.get(message.semantic_fingerprint)
+            exact = next(
+                (
+                    candidate
+                    for candidate in exact_index.get(
+                        message.semantic_fingerprint,
+                        [],
+                    )
+                    if _inside_window(
+                        message,
+                        candidate,
+                        self._config.repeat_window_seconds,
+                    )
+                ),
+                None,
+            )
             if exact is not None:
                 accepted.append(
                     replace(
@@ -244,10 +274,11 @@ class DuplicateDetector:
                 for candidate in accepted:
                     if candidate.duplicate_kind is not DuplicateKind.UNIQUE:
                         continue
-                    delta = abs(
-                        (message.published_at - candidate.published_at).total_seconds()
-                    )
-                    if delta > self._config.repeat_window_seconds:
+                    if not _inside_window(
+                        message,
+                        candidate,
+                        self._config.repeat_window_seconds,
+                    ):
                         continue
                     score = similarity(message.author_text, candidate.author_text)
                     if score > near_score:
@@ -269,7 +300,7 @@ class DuplicateDetector:
                 continue
 
             accepted.append(message)
-            exact_index[message.semantic_fingerprint] = message
+            exact_index.setdefault(message.semantic_fingerprint, []).append(message)
 
         return PreprocessingBatchResult(
             messages=tuple(accepted),
