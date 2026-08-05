@@ -3,6 +3,8 @@ name: stage5-bootstrap
 on:
   push:
     branches: [agent/parser-platform-compliance]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
