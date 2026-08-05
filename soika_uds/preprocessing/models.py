@@ -311,7 +311,10 @@ class PreprocessedMessage:
         object.__setattr__(
             self,
             "rejection_reasons",
-            tuple(_required(item, "rejection_reasons[]") for item in self.rejection_reasons),
+            tuple(
+                _required(item, "rejection_reasons[]")
+                for item in self.rejection_reasons
+            ),
         )
         object.__setattr__(self, "transformations", tuple(self.transformations))
         if self.decision is MessageDecision.ACCEPTED:
