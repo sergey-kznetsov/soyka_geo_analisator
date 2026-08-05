@@ -1,8 +1,6 @@
 name: stage6a-bootstrap
 
 on:
-  push:
-    branches: [agent/prepare-source-connectors]
   pull_request:
     branches: [main]
 
@@ -106,7 +104,7 @@ jobs:
             ruff==0.6.9 \
             pymorphy3==2.0.6 \
             pymorphy3-dicts-ru==2.4.417150.4580142
-          ruff check --fix \
+          ruff check --fix --unsafe-fixes \
             soika_uds/parsers/connectors \
             tests/unit/test_connector_preparation.py
           ruff format \
