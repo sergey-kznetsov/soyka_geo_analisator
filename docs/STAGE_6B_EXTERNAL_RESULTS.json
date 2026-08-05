@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "probe_kind": "controlled_single_request_public_metadata",
-  "generated_at": "2026-08-05T13:33:06Z",
+  "generated_at": "2026-08-05T13:35:26Z",
   "all_sources_responded": true,
   "results": [
     {
@@ -16,7 +16,7 @@
         "text_sample": "VK.com | VK window.nomodules = true; ;(function(){\"use strict\";function e(){let e=!1;function n(n){if(!e){const r=URL.parse(n??\"\");if(!r)return;r.searchParams.append(\"back\",window.location.href),e=!0,window.isRedirectChallenge=!0,window.location.href=r.toString()}}const r=undefined;new PerformanceOb"
       },
       "error": null,
-      "fetched_at": "2026-08-05T13:32:50Z",
+      "fetched_at": "2026-08-05T13:35:13Z",
       "received_response": true
     },
     {
@@ -29,10 +29,10 @@
         "html": true,
         "title": "Республика Татарстан | Группа на OK.ru | Вступай, читай, общайся в Одноклассниках!",
         "description": "Группа Республика Татарстан в Одноклассниках. Свидетельство о регистрации: https://gosuslugi.ru/snet/67909152acea5b74c41c2e48\n\nОфициальное сообщество Республики Татарстан в \"Одноклассниках\".\n\nАктуальные новости городов и районов. Достижения татарстанцев, культура и экономика.\n\n#РеспубликаТатарстан #Татарстан #НашаРеспублика",
-        "text_sample": "Республика Татарстан | Группа на OK.ru | Вступай, читай, общайся в Одноклассниках! {\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"item\":{\"name\":\"Главная\",\"@id\":\"https://ok.ru\"}},{\"@type\":\"ListItem\",\"position\":2,\"item\":{\"name\":\"Группы\",\""
+        "text_sample": "Республика Татарстан | Группа на OK.ru | Вступай, читай, общайся в Одноклассниках! {\"@context\":\"https://schema.org\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"item\":{\"@id\":\"https://ok.ru\",\"name\":\"Главная\"},\"position\":1},{\"@type\":\"ListItem\",\"item\":{\"@id\":\"https://ok.ru/groups\",\""
       },
       "error": null,
-      "fetched_at": "2026-08-05T13:32:52Z",
+      "fetched_at": "2026-08-05T13:35:16Z",
       "received_response": true
     },
     {
@@ -48,35 +48,35 @@
         "text_sample": "Новости Татарстана и Казани - Татар-информ window.yaContextCb=window.yaContextCb||[] { \"@context\":\"https://schema.org/\", \"@type\":\"Organization\", \"url\":\"https://www.tatar-inform.ru\", \"name\":\"Татар-информ (Tatar-inform)\", \"logo\":{ \"@type\": \"ImageObject\", \"url\": \"https://www.tatar-inform.ru/images/temp"
       },
       "error": null,
-      "fetched_at": "2026-08-05T13:32:55Z",
+      "fetched_at": "2026-08-05T13:35:18Z",
       "received_response": true
     },
     {
       "source_id": "municipal-public",
-      "url": "https://kzn.ru/",
-      "final_url": "https://kzn.ru/",
+      "url": "https://gkb.kzn.ru/meriya/press-tsentr/novosti/",
+      "final_url": "https://gkb.kzn.ru/meriya/press-tsentr/novosti/",
       "status_code": 403,
       "content_type": "text/plain",
       "extracted": {
         "html": true,
-        "text_sample": "Forbidden Transaction ID: a8cfd1e2-7277-4bc3-a203-20e6123d0a67"
+        "text_sample": "Forbidden Transaction ID: 3a31247b-0eaa-47b1-a28f-f5bb840a9fb9"
       },
       "error": "HTTP 403: Forbidden",
-      "fetched_at": "2026-08-05T13:32:57Z",
+      "fetched_at": "2026-08-05T13:35:20Z",
       "received_response": true
     },
     {
       "source_id": "dzen",
       "url": "https://dzen.ru/tatar-inform.ru",
-      "final_url": "https://sso.passport.yandex.ru/push?uuid=294578fe-93ad-424b-9011-a8d98ea8c09d&retpath=https%3A%2F%2Fdzen.ru%2Ftatar-inform.ru%3Fis_autologin_ya%3Dtrue",
+      "final_url": "https://sso.passport.yandex.ru/push?uuid=894f6e7d-f3bd-4cd8-a2c0-a682d3003141&retpath=https%3A%2F%2Fdzen.ru%2Ftatar-inform.ru%3Fis_autologin_ya%3Dtrue",
       "status_code": 200,
       "content_type": "text/html; charset=utf-8",
       "extracted": {
         "html": true,
-        "text_sample": "var it = {\"host\":\"https:\\u002F\\u002Fsso.dzen.ru\\u002Finstall?uuid=294578fe-93ad-424b-9011-a8d98ea8c09d\",\"retpath\":\"https:\\u002F\\u002Fdzen.ru\\u002Ftatar-inform.ru?is_autologin_ya=true\",\"dzen\":\"1\",\"root\":\"sso.passport.yandex.ru\"};(function() { function _emitProbe(targetOrigin, step) { try { if (!navig"
+        "text_sample": "var it = {\"host\":\"https:\\u002F\\u002Fsso.dzen.ru\\u002Finstall?uuid=894f6e7d-f3bd-4cd8-a2c0-a682d3003141\",\"retpath\":\"https:\\u002F\\u002Fdzen.ru\\u002Ftatar-inform.ru?is_autologin_ya=true\",\"dzen\":\"1\",\"root\":\"sso.passport.yandex.ru\"};(function() { function _emitProbe(targetOrigin, step) { try { if (!navig"
       },
       "error": null,
-      "fetched_at": "2026-08-05T13:32:58Z",
+      "fetched_at": "2026-08-05T13:35:21Z",
       "received_response": true
     },
     {
@@ -92,7 +92,7 @@
         "text_sample": "Горячее – самые интересные и обсуждаемые посты | Пикабу !function(){var t=document.createElement(\"script\");t.type=\"text/javascript\",t.async=!0,t.src=\"https://vk.ru/js/api/openapi.js?169\",t.onload=function(){VK.Retargeting.Init(\"VK-RTRG-1217519-1X1GE\"),VK.Retargeting.Hit()},document.head.appendChild("
       },
       "error": null,
-      "fetched_at": "2026-08-05T13:33:00Z",
+      "fetched_at": "2026-08-05T13:35:23Z",
       "received_response": true
     },
     {
@@ -108,7 +108,7 @@
         "text_sample": "(()=>window.__env__={\"API\":\"https://rutube.ru\",\"AUTH\":\"https://rutube.ru\",\"CHAT\":\"https://rutube.ru/chat/\",\"ECOM\":\"https://ecom.rutube.ru\",\"ENV\":\"prod\",\"GOYA\":\"https://goya.rutube.ru\",\"HOST\":\"rutube.ru\",\"LOG\":\"https://log.rutube.ru\",\"PANGOLIN\":\"https://rutube.ru/pangolin/api/web\",\"PANGOLIN_HOST\":\"ru"
       },
       "error": null,
-      "fetched_at": "2026-08-05T13:33:02Z",
+      "fetched_at": "2026-08-05T13:35:25Z",
       "received_response": true
     }
   ]
