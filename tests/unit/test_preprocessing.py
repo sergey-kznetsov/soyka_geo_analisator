@@ -198,7 +198,7 @@ def test_input_order_does_not_change_result_or_representative() -> None:
     assert forward.messages[1].duplicate.representative_key == "fixture:a"
 
 
-def test_invalid_timestamp_and_empty_model_text_are_rejected_without_data_loss() -> None:
+def test_invalid_timestamp_and_empty_text_preserve_original() -> None:
     naive = datetime(2026, 8, 5, 12, 0)
     result = preprocess_messages(
         (message("1", "Показать полностью", published_at=naive),)
