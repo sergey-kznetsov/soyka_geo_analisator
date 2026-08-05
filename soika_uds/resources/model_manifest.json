@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "name": "category-classifier",
+      "repo_id": "Sandrro/text_to_function_v2",
+      "revision": "main",
+      "license": "MIT",
+      "required": true
+    },
+    {
+      "name": "topic-classifier",
+      "repo_id": "Sandrro/text_to_subfunction_v10",
+      "revision": "main",
+      "license": "UNKNOWN_REQUIRES_REVIEW",
+      "required": true
+    },
+    {
+      "name": "address-ner",
+      "repo_id": "Geor111y/flair-ner-addresses-extractor",
+      "revision": "cabf2881925c9ca03312733fe840be032b1eec4b",
+      "license": "CC_REQUIRES_REVIEW",
+      "required": true
+    },
+    {
+      "name": "rubert-tokenizer",
+      "repo_id": "cointegrated/rubert-tiny2",
+      "revision": "e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae",
+      "license": "MIT",
+      "required": true
+    }
+  ]
+}
