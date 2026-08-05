@@ -1,8 +1,8 @@
 name: stage6b-normalize
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/stage6b-parser-adapters]
 
 permissions:
   contents: write
