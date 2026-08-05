@@ -12,7 +12,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
-_SOURCE_ID_RE = re.compile(r"^[a-z][a-z0-9._-]{2,63}$")
+_SOURCE_ID_RE = re.compile(r"^[a-z][a-z0-9._-]{1,63}$")
 _FIELD_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 
 
