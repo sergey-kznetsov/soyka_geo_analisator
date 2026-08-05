@@ -22,8 +22,8 @@ from soika_uds.orchestration import (
     JobRecord,
     PermanentStageError,
     PipelineStage,
-    RetryPolicy,
     RetryableStageError,
+    RetryPolicy,
     SoikaOrchestrator,
     StageResult,
 )
