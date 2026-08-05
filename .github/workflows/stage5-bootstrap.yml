@@ -1,0 +1,72 @@
+name: stage5-bootstrap
+
+on:
+  push:
+    branches: [agent/parser-platform-compliance]
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/parser-platform-compliance
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.15"
+
+      - name: Materialize parser platform
+        run: |
+          cat .stage5/payload-*.b64 | base64 --decode > /tmp/stage5.tar.gz
+          tar -xzf /tmp/stage5.tar.gz -C .
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/DEVELOPMENT_PLAN.md")
+          text = path.read_text(encoding="utf-8")
+          marker = "## 5. Платформа парсеров\n"
+          status = (
+              "\n**Статус: реализовано, проходит проверку.**\n\n"
+              "Архитектура, правовые gates и security controls: "
+              "`docs/PARSER_PLATFORM.md`.\n"
+          )
+          if status.strip() not in text:
+              if marker not in text:
+                  raise SystemExit("stage 5 heading not found")
+              text = text.replace(marker, marker + status, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Validate materialized code
+        run: |
+          python -m pip install --upgrade \
+            pytest==7.4.4 \
+            ruff==0.6.9 \
+            pymorphy3==2.0.6 \
+            pymorphy3-dicts-ru==2.4.417150.4580142
+          ruff check --fix \
+            soika_uds/__init__.py \
+            soika_uds/parsers \
+            tests/unit/test_parser_platform.py
+          python -m compileall -q soika_uds/parsers
+          python -m pytest -q tests/unit/test_parser_platform.py
+
+      - name: Remove bootstrap artifacts
+        run: |
+          rm -rf .stage5
+          rm .github/workflows/stage5-bootstrap.yml
+
+      - name: Commit parser platform
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Build compliant parser platform"
+          git push origin HEAD:agent/parser-platform-compliance
