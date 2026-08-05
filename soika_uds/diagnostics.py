@@ -19,7 +19,7 @@ class DiagnosticCheck:
 
 
 DEPENDENCY_GROUPS: dict[str, tuple[str, ...]] = {
-    "classification": ("torch", "transformers"),
+    "classification": ("torch", "transformers", "huggingface_hub"),
     "geolocation": (
         "flair",
         "natasha",
@@ -27,6 +27,7 @@ DEPENDENCY_GROUPS: dict[str, tuple[str, ...]] = {
         "geopy",
         "osmnx",
         "osm2geojson",
+        "pymorphy3",
         "shapely",
     ),
     "events": ("bertopic", "hdbscan", "umap", "networkx"),
@@ -34,26 +35,27 @@ DEPENDENCY_GROUPS: dict[str, tuple[str, ...]] = {
 
 
 def _module_checks(modules: Iterable[str], *, group: str) -> list[DiagnosticCheck]:
-    return [
-        DiagnosticCheck(
-            name=f"dependency:{group}:{module}",
-            ok=find_spec(module) is not None,
-            detail="installed" if find_spec(module) is not None else "not installed",
+    checks: list[DiagnosticCheck] = []
+    for module in modules:
+        installed = find_spec(module) is not None
+        checks.append(
+            DiagnosticCheck(
+                name=f"dependency:{group}:{module}",
+                ok=installed,
+                detail="installed" if installed else "not installed",
+            )
         )
-        for module in modules
-    ]
+    return checks
 
 
 def run_diagnostics(repository_root: Path | None = None) -> list[DiagnosticCheck]:
     checks: list[DiagnosticCheck] = []
-    supported_python = (3, 10, 6) <= version_info[:3] < (3, 11)
+    supported_python = version_info[:2] == (3, 11)
     checks.append(
         DiagnosticCheck(
             name="python",
             ok=supported_python,
-            detail=(
-                f"{python_version()} (normalized legacy baseline is >=3.10.6,<3.11)"
-            ),
+            detail=f"{python_version()} (required runtime is >=3.11,<3.12)",
         )
     )
 
