@@ -73,8 +73,9 @@ from .parsers import (
     SourcePolicy,
     SourceResearchRecord,
 )
+from .prediction import Prediction, PredictionFormatError
+from .preprocessing import ALGORITHM_VERSION as PREPROCESSING_ALGORITHM_VERSION
 from .preprocessing import (
-    ALGORITHM_VERSION as PREPROCESSING_ALGORITHM_VERSION,
     DuplicateDecision,
     DuplicateKind,
     LanguageResult,
@@ -91,7 +92,6 @@ from .preprocessing import (
     source_message_from_dict,
     source_message_to_dict,
 )
-from .prediction import Prediction, PredictionFormatError
 
 __version__ = "0.9.0"
 
