@@ -124,9 +124,7 @@ class HtmlSourceProfile:
             object.__setattr__(self, "kind", HtmlSourceKind(self.kind))
         source_id = _required(self.source_id, "source_id").lower()
         required_prefix = (
-            "local-media."
-            if self.kind is HtmlSourceKind.LOCAL_MEDIA
-            else "municipal."
+            "local-media." if self.kind is HtmlSourceKind.LOCAL_MEDIA else "municipal."
         )
         if not source_id.startswith(required_prefix):
             raise ConnectorDefinitionError(

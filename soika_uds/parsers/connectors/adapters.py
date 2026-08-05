@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -27,7 +26,12 @@ from ..models import (
 from ..registry import ParserRegistry
 from ..transport import ParserServices
 from .definitions import prepared_connector_catalog
-from .html_profiles import DiscoveryMode, HtmlSelectors, HtmlSourceKind, HtmlSourceProfile
+from .html_profiles import (
+    DiscoveryMode,
+    HtmlSelectors,
+    HtmlSourceKind,
+    HtmlSourceProfile,
+)
 
 PARSER_VERSION = "1.0.0"
 
@@ -156,7 +160,9 @@ def _json_object(response: object, source_id: str) -> Mapping[str, Any]:
     return payload
 
 
-def _validate_policy(policy: SourcePolicy, source_id: str, access: AccessMethod) -> None:
+def _validate_policy(
+    policy: SourcePolicy, source_id: str, access: AccessMethod
+) -> None:
     if policy.source_id != source_id:
         raise SourcePolicyError("adapter source_id must equal policy source_id")
     if policy.parser_version != PARSER_VERSION:
@@ -206,7 +212,9 @@ class VkApiAdapter:
             text=text,
             published_at=_timestamp(item.get("date"), "VK post.date"),
             url=f"https://vk.com/wall{owner_id}_{post_id}",
-            author_id=str(item.get("from_id")) if item.get("from_id") is not None else None,
+            author_id=str(item.get("from_id"))
+            if item.get("from_id") is not None
+            else None,
             metadata={"kind": "post", "owner_id": owner_id, "post_id": post_id},
         )
 
@@ -233,7 +241,9 @@ class VkApiAdapter:
             text=text,
             published_at=_timestamp(item.get("date"), "VK comment.date"),
             url=f"https://vk.com/wall{owner_id}_{post_id}?reply={comment_id}",
-            author_id=str(item.get("from_id")) if item.get("from_id") is not None else None,
+            author_id=str(item.get("from_id"))
+            if item.get("from_id") is not None
+            else None,
             metadata=metadata,
         )
 
@@ -279,7 +289,9 @@ class VkApiAdapter:
                 "checkpoint.comment_queue must be an array",
                 code="INVALID_CHECKPOINT",
             )
-        comment_queue = [dict(_mapping(item, "checkpoint.comment_queue[]")) for item in raw_queue]
+        comment_queue = [
+            dict(_mapping(item, "checkpoint.comment_queue[]")) for item in raw_queue
+        ]
 
         if comment_queue:
             target = comment_queue[0]
@@ -302,7 +314,9 @@ class VkApiAdapter:
                     "v": api_version,
                 },
             )
-            payload = self._vk_response(_json_object(services.transport.get(url), self.source_id))
+            payload = self._vk_response(
+                _json_object(services.transport.get(url), self.source_id)
+            )
             items = payload.get("items", [])
             if not isinstance(items, list):
                 raise PermanentParserError(
@@ -315,7 +329,11 @@ class VkApiAdapter:
                 if isinstance(item, Mapping) and str(item.get("text", "")).strip()
             )
             if len(items) >= self.page_size:
-                comment_queue[0] = {"owner_id": owner_id, "post_id": post_id, "offset": offset + len(items)}
+                comment_queue[0] = {
+                    "owner_id": owner_id,
+                    "post_id": post_id,
+                    "offset": offset + len(items),
+                }
             else:
                 comment_queue.pop(0)
             done = community_index >= len(community_ids) and not comment_queue
@@ -331,7 +349,9 @@ class VkApiAdapter:
             )
 
         if community_index >= len(community_ids):
-            return ParserPage(messages=(), next_checkpoint=state or None, done=True, raw_items_seen=0)
+            return ParserPage(
+                messages=(), next_checkpoint=state or None, done=True, raw_items_seen=0
+            )
 
         owner_id = self._owner_id(community_ids[community_index])
         url = _query_url(
@@ -344,7 +364,9 @@ class VkApiAdapter:
                 "v": api_version,
             },
         )
-        payload = self._vk_response(_json_object(services.transport.get(url), self.source_id))
+        payload = self._vk_response(
+            _json_object(services.transport.get(url), self.source_id)
+        )
         items = payload.get("items", [])
         if not isinstance(items, list):
             raise PermanentParserError(
@@ -385,8 +407,9 @@ class VkApiAdapter:
 
 
 class OkRequestSigner(Protocol):
-    def signed_parameters(self, parameters: Mapping[str, object]) -> Mapping[str, object]:
-        ...
+    def signed_parameters(
+        self, parameters: Mapping[str, object]
+    ) -> Mapping[str, object]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -397,19 +420,23 @@ class OkApiCredentials:
 
     def __post_init__(self) -> None:
         for field_name in ("application_key", "application_secret", "access_token"):
-            object.__setattr__(self, field_name, _required_text(getattr(self, field_name), field_name))
+            object.__setattr__(
+                self, field_name, _required_text(getattr(self, field_name), field_name)
+            )
 
 
 @dataclass(frozen=True, slots=True)
 class OkMd5Signer:
     credentials: OkApiCredentials
 
-    def signed_parameters(self, parameters: Mapping[str, object]) -> Mapping[str, object]:
-        unsigned = {key: value for key, value in parameters.items() if value is not None}
+    def signed_parameters(
+        self, parameters: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        unsigned = {
+            key: value for key, value in parameters.items() if value is not None
+        }
         unsigned["application_key"] = self.credentials.application_key
-        signature_source = "".join(
-            f"{key}={unsigned[key]}" for key in sorted(unsigned)
-        )
+        signature_source = "".join(f"{key}={unsigned[key]}" for key in sorted(unsigned))
         session_secret = hashlib.md5(
             f"{self.credentials.access_token}{self.credentials.application_secret}".encode(),
             usedforsecurity=False,
@@ -426,7 +453,9 @@ class OkMd5Signer:
 
 
 class UnavailableOkSigner:
-    def signed_parameters(self, parameters: Mapping[str, object]) -> Mapping[str, object]:
+    def signed_parameters(
+        self, parameters: Mapping[str, object]
+    ) -> Mapping[str, object]:
         del parameters
         raise PermanentParserError(
             "OK API credentials are not configured",
@@ -471,7 +500,9 @@ class OkApiAdapter:
         item: Mapping[str, Any],
     ) -> SourceMessage:
         comment_id = _required_text(item.get("id"), "OK comment.id")
-        text = _required_text(item.get("message") or item.get("text"), "OK comment.message")
+        text = _required_text(
+            item.get("message") or item.get("text"), "OK comment.message"
+        )
         published = item.get("date_ms", item.get("created_ms", item.get("date")))
         metadata: dict[str, object] = {
             "kind": "comment",
@@ -480,7 +511,9 @@ class OkApiAdapter:
         }
         parent = item.get("parent_id") or item.get("parentCommentId")
         if parent is not None:
-            metadata["parent_external_id"] = f"comment:{discussion_type}:{discussion_id}:{parent}"
+            metadata["parent_external_id"] = (
+                f"comment:{discussion_type}:{discussion_id}:{parent}"
+            )
         return SourceMessage(
             source=self.source_id,
             external_id=f"comment:{discussion_type}:{discussion_id}:{comment_id}",
@@ -489,7 +522,8 @@ class OkApiAdapter:
             url=(str(item["link"]) if item.get("link") else None),
             author_id=(
                 str(item.get("author_id") or item.get("author_ref"))
-                if item.get("author_id") is not None or item.get("author_ref") is not None
+                if item.get("author_id") is not None
+                or item.get("author_ref") is not None
                 else None
             ),
             metadata=metadata,
@@ -501,7 +535,9 @@ class OkApiAdapter:
         checkpoint: dict[str, object] | None,
         services: ParserServices,
     ) -> ParserPage:
-        discussion_ids = _string_array(request.options.get("discussion_ids"), "options.discussion_ids")
+        discussion_ids = _string_array(
+            request.options.get("discussion_ids"), "options.discussion_ids"
+        )
         discussion_types = _string_array(
             request.options.get("discussion_types"),
             "options.discussion_types",
@@ -512,7 +548,9 @@ class OkApiAdapter:
                 code="INVALID_CONNECTOR_OPTION",
             )
         state = dict(checkpoint or {})
-        index = _int_value(state.get("discussion_index", 0), "checkpoint.discussion_index")
+        index = _int_value(
+            state.get("discussion_index", 0), "checkpoint.discussion_index"
+        )
         anchor = state.get("anchor")
         if anchor is not None and not isinstance(anchor, str):
             raise PermanentParserError(
@@ -520,7 +558,9 @@ class OkApiAdapter:
                 code="INVALID_CHECKPOINT",
             )
         if index >= len(discussion_ids):
-            return ParserPage(messages=(), next_checkpoint=state or None, done=True, raw_items_seen=0)
+            return ParserPage(
+                messages=(), next_checkpoint=state or None, done=True, raw_items_seen=0
+            )
         discussion_id = discussion_ids[index]
         discussion_type = discussion_types[0 if len(discussion_types) == 1 else index]
         parameters = self.signer.signed_parameters(
@@ -571,9 +611,9 @@ class OkApiAdapter:
 class _Node:
     tag: str
     attrs: dict[str, str]
-    children: list["_Node"]
+    children: list[_Node]
     text_parts: list[str]
-    parent: "_Node | None" = None
+    parent: _Node | None = None
 
     def text(self) -> str:
         chunks = list(self.text_parts)
@@ -583,7 +623,22 @@ class _Node:
 
 
 class _DomParser(HTMLParser):
-    _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+    _VOID = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -679,7 +734,9 @@ def _select(root: _Node, selector: str) -> list[_Node]:
     return current
 
 
-def _first_value(root: _Node, selector: str, *, attribute: str | None = None) -> str | None:
+def _first_value(
+    root: _Node, selector: str, *, attribute: str | None = None
+) -> str | None:
     nodes = _select(root, selector)
     if not nodes:
         return None
@@ -688,7 +745,9 @@ def _first_value(root: _Node, selector: str, *, attribute: str | None = None) ->
     return nodes[0].text() or None
 
 
-def _selector_value(root: _Node, selector: str, *, preferred_attributes: tuple[str, ...] = ()) -> str | None:
+def _selector_value(
+    root: _Node, selector: str, *, preferred_attributes: tuple[str, ...] = ()
+) -> str | None:
     nodes = _select(root, selector)
     if not nodes:
         return None
@@ -762,11 +821,15 @@ class HtmlConnectorAdapter:
     def policy(self) -> SourcePolicy:
         return self._policy
 
-    def _profile_and_urls(self, request: ParserRequest) -> tuple[HtmlSourceProfile | None, list[str]]:
+    def _profile_and_urls(
+        self, request: ParserRequest
+    ) -> tuple[HtmlSourceProfile | None, list[str]]:
         profile: HtmlSourceProfile | None = None
         raw_profile = request.options.get("site_profile")
         if raw_profile is not None:
-            profile = _profile_from_mapping(_mapping(raw_profile, "options.site_profile"))
+            profile = _profile_from_mapping(
+                _mapping(raw_profile, "options.site_profile")
+            )
         raw_urls = request.options.get("urls")
         if raw_urls is None:
             if self.source_id == "dzen":
@@ -775,7 +838,11 @@ class HtmlConnectorAdapter:
                 raw_urls = request.options.get("community_urls")
             elif self.source_id == "rutube":
                 raw_urls = request.options.get("channel_urls")
-        urls = list(_string_array(raw_urls, "options.urls")) if raw_urls is not None else []
+        urls = (
+            list(_string_array(raw_urls, "options.urls"))
+            if raw_urls is not None
+            else []
+        )
         if not urls and profile is not None:
             urls = list(profile.discovery_urls)
         if not urls:
@@ -793,9 +860,14 @@ class HtmlConnectorAdapter:
                     code="INVALID_CONNECTOR_OPTION",
                 )
             host = parsed.hostname.encode("idna").decode("ascii").lower()
-            if allowed_hosts and host not in allowed_hosts and not any(
-                self._policy.security.allow_subdomains and host.endswith(f".{allowed}")
-                for allowed in allowed_hosts
+            if (
+                allowed_hosts
+                and host not in allowed_hosts
+                and not any(
+                    self._policy.security.allow_subdomains
+                    and host.endswith(f".{allowed}")
+                    for allowed in allowed_hosts
+                )
             ):
                 raise PermanentParserError(
                     "HTML connector URL is outside policy allowlist",
@@ -844,7 +916,9 @@ class HtmlConnectorAdapter:
         messages: list[SourceMessage] = []
         if article_text and published_value:
             content = f"{title}. {article_text}" if title else article_text
-            author = _selector_value(root, selectors.author) if selectors.author else None
+            author = (
+                _selector_value(root, selectors.author) if selectors.author else None
+            )
             messages.append(
                 SourceMessage(
                     source=self.source_id,
@@ -886,7 +960,10 @@ class HtmlConnectorAdapter:
                     if selectors.comment_author
                     else None
                 )
-                metadata: dict[str, object] = {"kind": "comment", "document_url": canonical_url}
+                metadata: dict[str, object] = {
+                    "kind": "comment",
+                    "document_url": canonical_url,
+                }
                 parent = (
                     _selector_value(
                         comment_node,
@@ -903,7 +980,9 @@ class HtmlConnectorAdapter:
                         source=self.source_id,
                         external_id=f"comment:{_stable_external_id(self.source_id, canonical_url, comment_id)}",
                         text=comment_text,
-                        published_at=_timestamp(comment_published, "HTML comment published_at"),
+                        published_at=_timestamp(
+                            comment_published, "HTML comment published_at"
+                        ),
                         url=f"{canonical_url}#comment-{comment_id}",
                         author_id=comment_author,
                         metadata=metadata,
@@ -934,7 +1013,9 @@ class HtmlConnectorAdapter:
             discovered = tuple(
                 element.text.strip()
                 for element in root.iter()
-                if _xml_local_name(element.tag) == "loc" and element.text and element.text.strip()
+                if _xml_local_name(element.tag) == "loc"
+                and element.text
+                and element.text.strip()
             )
             return (), discovered
         entries = [
@@ -950,7 +1031,9 @@ class HtmlConnectorAdapter:
             link = _child_text(entry, ("link", "guid", "id"))
             if link is None:
                 for child in entry:
-                    if _xml_local_name(child.tag) == "link" and child.attrib.get("href"):
+                    if _xml_local_name(child.tag) == "link" and child.attrib.get(
+                        "href"
+                    ):
                         link = child.attrib["href"]
                         break
             if not description or not published:
@@ -990,20 +1073,31 @@ class HtmlConnectorAdapter:
             )
         queue = [str(item) for item in queue_value]
         if not queue:
-            return ParserPage(messages=(), next_checkpoint={"queue": []}, done=True, raw_items_seen=0)
+            return ParserPage(
+                messages=(), next_checkpoint={"queue": []}, done=True, raw_items_seen=0
+            )
         url = queue.pop(0)
         response = services.transport.get(
             url,
-            headers={"Accept": "text/html, application/rss+xml, application/atom+xml, application/xml;q=0.9"},
+            headers={
+                "Accept": "text/html, application/rss+xml, application/atom+xml, application/xml;q=0.9"
+            },
         )
         content_type = (response.content_type or "").split(";", 1)[0].strip().lower()
-        if content_type in {"application/rss+xml", "application/atom+xml", "application/xml", "text/xml"} or body_looks_xml(response.body):
+        if content_type in {
+            "application/rss+xml",
+            "application/atom+xml",
+            "application/xml",
+            "text/xml",
+        } or body_looks_xml(response.body):
             messages, discovered = self._xml_messages(url, response.body)
             for discovered_url in discovered:
                 if discovered_url not in queue:
                     queue.append(discovered_url)
         else:
-            selectors = profile.selectors if profile is not None else self.default_selectors
+            selectors = (
+                profile.selectors if profile is not None else self.default_selectors
+            )
             if selectors is None:
                 raise PermanentParserError(
                     "HTML selector profile is required",
@@ -1019,7 +1113,9 @@ class HtmlConnectorAdapter:
 
 
 def body_looks_xml(body: bytes) -> bool:
-    return body.lstrip().startswith(b"<?xml") or body.lstrip().startswith((b"<rss", b"<feed", b"<urlset", b"<sitemapindex"))
+    return body.lstrip().startswith(b"<?xml") or body.lstrip().startswith(
+        (b"<rss", b"<feed", b"<urlset", b"<sitemapindex")
+    )
 
 
 def _default_html_selectors() -> HtmlSelectors:

@@ -122,9 +122,7 @@ def probe_target(
 ) -> ExternalProbeResult:
     source_id = str(target["source_id"]).strip()
     url = str(target["url"]).strip()
-    fetched_at = datetime.now(UTC).isoformat(timespec="seconds").replace(
-        "+00:00", "Z"
-    )
+    fetched_at = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
     request = Request(
         url,
         headers={

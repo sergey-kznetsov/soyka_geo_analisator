@@ -13,9 +13,9 @@ from soika_uds.parsers.connectors import (
     build_prepared_parser_registry,
 )
 from tests.unit.connector_fixture_support import (
-    FixtureTransport,
     NOW,
     PURPOSE,
+    FixtureTransport,
     compliance_context,
     connector_policies,
     connector_requests,
@@ -79,9 +79,7 @@ def test_fixture_suite_runs_through_parser_runner_for_all_sources() -> None:
 
 def test_ok_signatures_are_deterministic_and_do_not_expose_secret() -> None:
     signer = OkMd5Signer(OkApiCredentials("app", "private-secret", "token"))
-    first = signer.signed_parameters(
-        {"method": "discussions.getComments", "count": 10}
-    )
+    first = signer.signed_parameters({"method": "discussions.getComments", "count": 10})
     second = signer.signed_parameters(
         {"count": 10, "method": "discussions.getComments"}
     )

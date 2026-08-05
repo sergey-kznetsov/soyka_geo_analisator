@@ -44,9 +44,7 @@ def approved_connector_policy(
         legal_basis="controlled integration fixture",
         terms_url=f"https://{domains[0]}/terms",
         privacy_url=f"https://{domains[0]}/privacy",
-        official_docs_url=(
-            f"https://{domains[0]}/docs" if not public_web else None
-        ),
+        official_docs_url=(f"https://{domains[0]}/docs" if not public_web else None),
         robots_requirement=(
             RobotsRequirement.REQUIRED
             if public_web
@@ -55,9 +53,7 @@ def approved_connector_policy(
         research=SourceResearchRecord(
             collection_plan="Collect one allowlisted fixture page.",
             official_access_available=(
-                RequirementDecision.NO
-                if public_web
-                else RequirementDecision.YES
+                RequirementDecision.NO if public_web else RequirementDecision.YES
             ),
             permission_required=RequirementDecision.YES,
             permission_contact="legal@example.test",
@@ -68,9 +64,7 @@ def approved_connector_policy(
             deletion_or_correction_process="Delete by external identifier.",
             rate_limit_source="Controlled fixture transport.",
             reviewed_sources=(f"https://{domains[0]}/terms",),
-            robots_url=(
-                f"https://{domains[0]}/robots.txt" if public_web else None
-            ),
+            robots_url=(f"https://{domains[0]}/robots.txt" if public_web else None),
         ),
         permission=PermissionEvidence(
             kind=PermissionEvidenceKind.INTERNAL_LEGAL_MEMO,
@@ -108,9 +102,7 @@ def approved_connector_policy(
                 "application/xml",
             ),
             allow_subdomains=True,
-            credential_reference=(
-                f"secret://{source_id}" if not public_web else None
-            ),
+            credential_reference=(f"secret://{source_id}" if not public_web else None),
         ),
         rate_limit=RateLimitPolicy(
             requests_per_minute=6000,
@@ -159,9 +151,7 @@ class FixtureTransport:
                                 "id": 10,
                                 "from_id": -1,
                                 "date": 1785931200,
-                                "text": (
-                                    "На улице Центральной ремонтируют освещение"
-                                ),
+                                "text": ("На улице Центральной ремонтируют освещение"),
                             }
                         ]
                     }
@@ -209,9 +199,7 @@ class FixtureTransport:
                 ),
             )
         html_by_host = {
-            "municipal.example.ru": (
-                "Муниципалитет сообщил о ремонте тротуара"
-            ),
+            "municipal.example.ru": ("Муниципалитет сообщил о ремонте тротуара"),
             "dzen.ru": "Жители обсудили благоустройство сквера",
             "pikabu.ru": "Пользователи сообщили о яме на дороге",
             "rutube.ru": "Видео о ремонте городской набережной",
@@ -390,9 +378,7 @@ def compliance_context(policy_value: SourcePolicy) -> ComplianceContext:
     return ComplianceContext(
         purpose=PURPOSE,
         robots_decision=(
-            RobotsDecision.ALLOWED
-            if public_web
-            else RobotsDecision.NOT_APPLICABLE
+            RobotsDecision.ALLOWED if public_web else RobotsDecision.NOT_APPLICABLE
         ),
         credential_available=not public_web,
         current_time=NOW,
