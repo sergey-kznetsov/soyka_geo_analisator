@@ -26,6 +26,18 @@ jobs:
 
       - name: Verify and materialize parser platform
         run: |
+          cat > /tmp/fix-004.sha256 <<'EOF'
+          67198287992c9b625f6d4205ef3b835c8b6100bd9545d4108a4cc7de99ea5009  .stage5/fix-004-0.part
+          5da94e5492d64f174cae8395febb6530bdaf43584d97719df42936467e6e07f4  .stage5/fix-004-1.part
+          129fe9d42c354ecdb2ec475219679017db86d1175d2ce4470976b656bce5ff95  .stage5/fix-004-2.part
+          0030d83c3f3fc1c6225c66b7e705756fb04a956f5024dde694d0961af7336f62  .stage5/fix-004-3.part
+          bc1635e992c4798e9ba9ec1432cc681d6849c95ddccce15db36ea18d402a479e  .stage5/fix-004-4.part
+          4459a142640e412346dfc1ea539b099baba749761e63f41796ddc30293266af2  .stage5/fix-004-5.part
+          bb280a3b0de539b888c634147e9dab2b8d1a7db661cb0d1cee31dc95dc5316af  .stage5/fix-004-6.part
+          EOF
+          sha256sum --check /tmp/fix-004.sha256
+          cat .stage5/fix-004-*.part > .stage5/payload-004.b64
+
           cat > /tmp/stage5.sha256 <<'EOF'
           49801b16cf808abd8f6c12603dd36d4e13cf8737c8a41d6a56d099e844b4b390  .stage5/payload-000.b64
           ca6ba63271a4ddab13312762630f3e0c64aa1d49b2f64c312c837df33007c963  .stage5/payload-001.b64
