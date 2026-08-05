@@ -65,8 +65,8 @@ RUN apt-get update \
         proj-bin \
         tini \
     && rm -rf /var/lib/apt/lists/* \
-    && test "$(gdal-config --version | cut -d. -f1-2)" = "${EXPECTED_GDAL}" \
-    && test "$(geos-config --version | cut -d. -f1-2)" = "${EXPECTED_GEOS}" \
+    && gdalinfo --version | grep -q "GDAL ${EXPECTED_GDAL}" \
+    && dpkg-query -W -f='${Version}' libgeos-c1v5 | grep -q "^${EXPECTED_GEOS}" \
     && proj 2>&1 | grep -q "Rel. ${EXPECTED_PROJ}"
 
 RUN groupadd --gid 10001 soika \
