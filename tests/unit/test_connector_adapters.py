@@ -118,3 +118,15 @@ def test_controlled_external_targets_cover_all_sources_once() -> None:
         "rutube",
     ]
     assert all(str(item["url"]).startswith("https://") for item in targets)
+
+
+def test_external_probe_respects_declared_charset() -> None:
+    from soika_uds.parsers.connectors.external import _extract
+
+    body = (
+        "<html><head><title>Городские новости</title></head>"
+        "<body>Казань</body></html>"
+    ).encode("windows-1251")
+    result = _extract(body, "text/html; charset=windows-1251")
+    assert result["title"] == "Городские новости"
+    assert "Казань" in result["text_sample"]

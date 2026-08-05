@@ -68,9 +68,22 @@ class ExternalProbeResult:
         return self.status_code is not None
 
 
-def _extract_json(body: bytes) -> dict[str, Any]:
+def _decode_body(body: bytes, content_type: str | None) -> str:
+    charset = "utf-8"
+    for parameter in (content_type or "").split(";")[1:]:
+        name, separator, value = parameter.strip().partition("=")
+        if separator and name.lower() == "charset" and value.strip():
+            charset = value.strip().strip("'\"")
+            break
     try:
-        value = json.loads(body.decode("utf-8"))
+        return body.decode(charset, errors="replace")
+    except LookupError:
+        return body.decode("utf-8", errors="replace")
+
+
+def _extract_json(body: bytes, content_type: str | None) -> dict[str, Any]:
+    try:
+        value = json.loads(_decode_body(body, content_type))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return {"json": False}
     if isinstance(value, dict):
@@ -92,8 +105,8 @@ def _extract_json(body: bytes) -> dict[str, Any]:
     return {"json": True, "value_type": type(value).__name__}
 
 
-def _extract_html(body: bytes) -> dict[str, Any]:
-    text = body.decode("utf-8", errors="replace")
+def _extract_html(body: bytes, content_type: str | None) -> dict[str, Any]:
+    text = _decode_body(body, content_type)
     parser = _TitleParser()
     parser.feed(text)
     result: dict[str, Any] = {"html": True}
@@ -111,8 +124,8 @@ def _extract_html(body: bytes) -> dict[str, Any]:
 def _extract(body: bytes, content_type: str | None) -> dict[str, Any]:
     normalized = (content_type or "").lower()
     if "json" in normalized or body.lstrip().startswith((b"{", b"[")):
-        return _extract_json(body)
-    return _extract_html(body)
+        return _extract_json(body, content_type)
+    return _extract_html(body, content_type)
 
 
 def probe_target(
