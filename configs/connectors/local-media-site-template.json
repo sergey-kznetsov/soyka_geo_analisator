@@ -1,0 +1,27 @@
+{
+  "source_id": "local-media.example-city-news",
+  "display_name": "Replace with local publication name",
+  "kind": "local_media",
+  "base_url": "https://example.invalid/",
+  "region": "Replace with Russian Federation subject",
+  "municipalities": ["Replace with municipality"],
+  "discovery_mode": "sitemap",
+  "discovery_urls": ["https://example.invalid/sitemap.xml"],
+  "selectors": {
+    "title": "h1",
+    "body": "article",
+    "published_at": "time[datetime]",
+    "author": ".article-author",
+    "canonical_url": "link[rel='canonical']",
+    "comment_item": ".comment",
+    "comment_text": ".comment-text",
+    "comment_id": "[data-comment-id]",
+    "comment_author": ".comment-author",
+    "comment_published_at": "time[datetime]",
+    "comment_parent_id": "[data-parent-id]"
+  },
+  "robots_url": "https://example.invalid/robots.txt",
+  "render_javascript": false,
+  "rendering_justification": null,
+  "enabled": false
+}

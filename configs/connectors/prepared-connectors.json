@@ -1,0 +1,452 @@
+{
+  "schema_version": "1.0.0",
+  "connectors": [
+    {
+      "source_id": "dzen",
+      "display_name": "Дзен",
+      "family": "community_platform",
+      "access_modes": [
+        "public_html"
+      ],
+      "capabilities": [
+        "documents",
+        "comments",
+        "replies",
+        "html_discovery"
+      ],
+      "checkpoint_fields": [
+        {
+          "name": "next_url",
+          "kind": "url",
+          "required": false,
+          "description": "Next reviewed public page"
+        }
+      ],
+      "options": [
+        {
+          "name": "channel_urls",
+          "kind": "string_array",
+          "required": true,
+          "description": "Allowlisted local-media channel URLs"
+        }
+      ],
+      "cost_model": "free_public",
+      "policy_template": "configs/sources/source-policy-template.json",
+      "jurisdictions": [
+        "RU"
+      ],
+      "allowed_domains": [
+        "dzen.ru"
+      ],
+      "requires_site_profile": false,
+      "customer_supplied_credentials": false,
+      "paid_fallback_allowed": false,
+      "lifecycle": "review_required",
+      "network_enabled": false,
+      "notes": [
+        "No live adapter until permitted collection mechanics are confirmed."
+      ],
+      "metadata": {
+        "priority": 5,
+        "territory": "Russian Federation"
+      }
+    },
+    {
+      "source_id": "local-media",
+      "display_name": "Локальные СМИ РФ",
+      "family": "local_media",
+      "access_modes": [
+        "public_html",
+        "rss_atom",
+        "sitemap",
+        "partner_export"
+      ],
+      "capabilities": [
+        "documents",
+        "comments",
+        "replies",
+        "edit_markers",
+        "deletion_markers",
+        "rss_discovery",
+        "sitemap_discovery",
+        "html_discovery",
+        "partner_export"
+      ],
+      "checkpoint_fields": [
+        {
+          "name": "last_seen_at",
+          "kind": "timestamp",
+          "required": false,
+          "description": "Latest processed publication time"
+        },
+        {
+          "name": "next_url",
+          "kind": "url",
+          "required": false,
+          "description": "Next listing or feed URL"
+        }
+      ],
+      "options": [
+        {
+          "name": "site_profile",
+          "kind": "object",
+          "required": true,
+          "description": "Reviewed local-media site profile"
+        },
+        {
+          "name": "include_comments",
+          "kind": "boolean",
+          "required": false,
+          "description": "Collect public comments"
+        }
+      ],
+      "cost_model": "free_public",
+      "policy_template": "configs/sources/source-policy-template.json",
+      "jurisdictions": [
+        "RU"
+      ],
+      "allowed_domains": [],
+      "requires_site_profile": true,
+      "customer_supplied_credentials": false,
+      "paid_fallback_allowed": false,
+      "lifecycle": "prepared",
+      "network_enabled": false,
+      "notes": [
+        "Every domain requires its own policy, robots decision and selectors.",
+        "RSS and sitemap are discovery aids; article and comment content may come from HTML."
+      ],
+      "metadata": {
+        "priority": 3,
+        "territory": "Russian Federation"
+      }
+    },
+    {
+      "source_id": "municipal-public",
+      "display_name": "Муниципальные публичные источники РФ",
+      "family": "municipal",
+      "access_modes": [
+        "public_html",
+        "rss_atom",
+        "sitemap",
+        "partner_export"
+      ],
+      "capabilities": [
+        "documents",
+        "comments",
+        "edit_markers",
+        "deletion_markers",
+        "geo_tags",
+        "attachments",
+        "rss_discovery",
+        "sitemap_discovery",
+        "html_discovery",
+        "partner_export"
+      ],
+      "checkpoint_fields": [
+        {
+          "name": "last_seen_at",
+          "kind": "timestamp",
+          "required": false,
+          "description": "Latest processed item time"
+        },
+        {
+          "name": "next_url",
+          "kind": "url",
+          "required": false,
+          "description": "Next public listing URL"
+        }
+      ],
+      "options": [
+        {
+          "name": "site_profile",
+          "kind": "object",
+          "required": true,
+          "description": "Reviewed municipal site profile"
+        },
+        {
+          "name": "public_sections",
+          "kind": "string_array",
+          "required": true,
+          "description": "Allowlisted public sections"
+        }
+      ],
+      "cost_model": "free_public",
+      "policy_template": "configs/sources/source-policy-template.json",
+      "jurisdictions": [
+        "RU"
+      ],
+      "allowed_domains": [],
+      "requires_site_profile": true,
+      "customer_supplied_credentials": false,
+      "paid_fallback_allowed": false,
+      "lifecycle": "prepared",
+      "network_enabled": false,
+      "notes": [
+        "Non-public citizen appeals require a partner export and separate legal basis."
+      ],
+      "metadata": {
+        "priority": 4,
+        "territory": "Russian Federation"
+      }
+    },
+    {
+      "source_id": "ok",
+      "display_name": "Одноклассники",
+      "family": "social_network",
+      "access_modes": [
+        "official_api"
+      ],
+      "capabilities": [
+        "documents",
+        "comments",
+        "replies",
+        "deletion_markers",
+        "attachments"
+      ],
+      "checkpoint_fields": [
+        {
+          "name": "anchor",
+          "kind": "cursor",
+          "required": false,
+          "description": "Discussion page anchor"
+        },
+        {
+          "name": "discussion_cursor",
+          "kind": "cursor",
+          "required": false,
+          "description": "Discussion cursor"
+        }
+      ],
+      "options": [
+        {
+          "name": "discussion_ids",
+          "kind": "string_array",
+          "required": true,
+          "description": "Allowlisted public discussion identifiers"
+        },
+        {
+          "name": "discussion_types",
+          "kind": "string_array",
+          "required": true,
+          "description": "Approved public discussion types"
+        },
+        {
+          "name": "include_removed",
+          "kind": "boolean",
+          "required": false,
+          "description": "Request removal markers"
+        }
+      ],
+      "cost_model": "free_official_api",
+      "policy_template": "configs/sources/source-policy-template.json",
+      "jurisdictions": [
+        "RU"
+      ],
+      "allowed_domains": [
+        "api.ok.ru",
+        "ok.ru"
+      ],
+      "requires_site_profile": false,
+      "customer_supplied_credentials": true,
+      "paid_fallback_allowed": false,
+      "lifecycle": "review_required",
+      "network_enabled": false,
+      "notes": [
+        "Requires an approved application session and documented access rights."
+      ],
+      "metadata": {
+        "priority": 2,
+        "territory": "Russian Federation"
+      }
+    },
+    {
+      "source_id": "pikabu",
+      "display_name": "Пикабу",
+      "family": "community_platform",
+      "access_modes": [
+        "public_html"
+      ],
+      "capabilities": [
+        "documents",
+        "comments",
+        "replies",
+        "edit_markers",
+        "deletion_markers",
+        "html_discovery"
+      ],
+      "checkpoint_fields": [
+        {
+          "name": "next_url",
+          "kind": "url",
+          "required": false,
+          "description": "Next reviewed public page"
+        }
+      ],
+      "options": [
+        {
+          "name": "tags",
+          "kind": "string_array",
+          "required": false,
+          "description": "Approved locality and issue tags"
+        },
+        {
+          "name": "community_urls",
+          "kind": "string_array",
+          "required": false,
+          "description": "Allowlisted communities"
+        }
+      ],
+      "cost_model": "free_public",
+      "policy_template": "configs/sources/source-policy-template.json",
+      "jurisdictions": [
+        "RU"
+      ],
+      "allowed_domains": [
+        "pikabu.ru"
+      ],
+      "requires_site_profile": false,
+      "customer_supplied_credentials": false,
+      "paid_fallback_allowed": false,
+      "lifecycle": "review_required",
+      "network_enabled": false,
+      "notes": [
+        "Connector must stop on CAPTCHA or anti-bot challenge.",
+        "Public availability is not treated as permission to retain personal identifiers."
+      ],
+      "metadata": {
+        "priority": 6,
+        "territory": "Russian Federation"
+      }
+    },
+    {
+      "source_id": "rutube",
+      "display_name": "RUTUBE",
+      "family": "video_platform",
+      "access_modes": [
+        "public_html"
+      ],
+      "capabilities": [
+        "documents",
+        "comments",
+        "replies",
+        "html_discovery"
+      ],
+      "checkpoint_fields": [
+        {
+          "name": "next_url",
+          "kind": "url",
+          "required": false,
+          "description": "Next reviewed public video page"
+        }
+      ],
+      "options": [
+        {
+          "name": "channel_urls",
+          "kind": "string_array",
+          "required": true,
+          "description": "Allowlisted regional and municipal channels"
+        }
+      ],
+      "cost_model": "free_public",
+      "policy_template": "configs/sources/source-policy-template.json",
+      "jurisdictions": [
+        "RU"
+      ],
+      "allowed_domains": [
+        "rutube.ru"
+      ],
+      "requires_site_profile": false,
+      "customer_supplied_credentials": false,
+      "paid_fallback_allowed": false,
+      "lifecycle": "review_required",
+      "network_enabled": false,
+      "notes": [
+        "Use only a documented public interface or an approved partner export."
+      ],
+      "metadata": {
+        "priority": 7,
+        "territory": "Russian Federation"
+      }
+    },
+    {
+      "source_id": "vk",
+      "display_name": "ВКонтакте",
+      "family": "social_network",
+      "access_modes": [
+        "official_api"
+      ],
+      "capabilities": [
+        "documents",
+        "comments",
+        "replies",
+        "edit_markers",
+        "deletion_markers",
+        "search",
+        "geo_tags",
+        "attachments"
+      ],
+      "checkpoint_fields": [
+        {
+          "name": "offset",
+          "kind": "offset",
+          "required": false,
+          "description": "API result offset"
+        },
+        {
+          "name": "post_cursor",
+          "kind": "cursor",
+          "required": false,
+          "description": "Current post cursor"
+        }
+      ],
+      "options": [
+        {
+          "name": "community_ids",
+          "kind": "string_array",
+          "required": true,
+          "description": "Allowlisted public community identifiers"
+        },
+        {
+          "name": "query_terms",
+          "kind": "string_array",
+          "required": false,
+          "description": "Territory search terms"
+        },
+        {
+          "name": "include_replies",
+          "kind": "boolean",
+          "required": false,
+          "description": "Collect nested public replies"
+        },
+        {
+          "name": "api_version",
+          "kind": "string",
+          "required": false,
+          "description": "Pinned VK API version"
+        }
+      ],
+      "cost_model": "free_official_api",
+      "policy_template": "configs/sources/source-policy-template.json",
+      "jurisdictions": [
+        "RU"
+      ],
+      "allowed_domains": [
+        "api.vk.com",
+        "vk.com"
+      ],
+      "requires_site_profile": false,
+      "customer_supplied_credentials": true,
+      "paid_fallback_allowed": false,
+      "lifecycle": "review_required",
+      "network_enabled": false,
+      "notes": [
+        "Use only official API methods and an application-owned credential.",
+        "No browser-session emulation or hidden endpoints."
+      ],
+      "metadata": {
+        "priority": 1,
+        "territory": "Russian Federation"
+      }
+    }
+  ]
+}

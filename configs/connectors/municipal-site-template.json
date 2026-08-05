@@ -1,0 +1,20 @@
+{
+  "source_id": "municipal.example-city",
+  "display_name": "Replace with municipal public source",
+  "kind": "municipal",
+  "base_url": "https://example.invalid/",
+  "region": "Replace with Russian Federation subject",
+  "municipalities": ["Replace with municipality"],
+  "discovery_mode": "section",
+  "discovery_urls": ["https://example.invalid/public/"],
+  "selectors": {
+    "title": "h1",
+    "body": "main article",
+    "published_at": "time[datetime]",
+    "canonical_url": "link[rel='canonical']"
+  },
+  "robots_url": "https://example.invalid/robots.txt",
+  "render_javascript": false,
+  "rendering_justification": null,
+  "enabled": false
+}
