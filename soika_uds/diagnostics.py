@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from importlib.util import find_spec
 from pathlib import Path
 from platform import python_version
 from sys import version_info
-from typing import Iterable
 
 
 @dataclass(frozen=True, slots=True)
