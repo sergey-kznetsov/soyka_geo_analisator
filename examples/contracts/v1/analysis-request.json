@@ -1,0 +1,26 @@
+{
+  "contract_version": "1.0.0",
+  "message_type": "analysis.request",
+  "analysis_id": "analysis-2026-0001",
+  "requested_at": "2026-08-05T08:18:00Z",
+  "idempotency_key": "geo-analyzer:analysis-2026-0001",
+  "territory": {
+    "city": "Ижевск",
+    "address": "Ижевск, Пушкинская улица, 277",
+    "point": {
+      "latitude": 56.8701,
+      "longitude": 53.2143
+    },
+    "radius_meters": 1500
+  },
+  "period": {
+    "from": "2026-05-01",
+    "to": "2026-08-05"
+  },
+  "sources": ["city_portal", "public_comments"],
+  "options": {
+    "language": "ru",
+    "include_messages": true
+  },
+  "allow_partial": true
+}
