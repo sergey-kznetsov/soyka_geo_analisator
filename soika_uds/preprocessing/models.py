@@ -41,8 +41,13 @@ class TransformationStep:
             raise PreprocessingError("transformation step name must not be empty")
         for field_name in ("before_sha256", "after_sha256"):
             value = getattr(self, field_name)
-            if len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
-                raise PreprocessingError(f"{field_name} must be a lowercase SHA-256")
+            valid_digest = len(value) == 64 and all(
+                char in "0123456789abcdef" for char in value
+            )
+            if not valid_digest:
+                raise PreprocessingError(
+                    f"{field_name} must be a lowercase SHA-256"
+                )
         object.__setattr__(self, "details", MappingProxyType(dict(self.details)))
 
 
@@ -83,13 +88,21 @@ class PreprocessedMessage:
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
         for field_name in ("content_sha256", "semantic_fingerprint"):
             value = getattr(self, field_name)
-            if len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
-                raise PreprocessingError(f"{field_name} must be a lowercase SHA-256")
+            valid_digest = len(value) == 64 and all(
+                char in "0123456789abcdef" for char in value
+            )
+            if not valid_digest:
+                raise PreprocessingError(
+                    f"{field_name} must be a lowercase SHA-256"
+                )
         if not isinstance(self.duplicate_kind, DuplicateKind):
             object.__setattr__(
                 self, "duplicate_kind", DuplicateKind(self.duplicate_kind)
             )
-        if self.duplicate_kind is DuplicateKind.UNIQUE and self.duplicate_of is not None:
+        if (
+            self.duplicate_kind is DuplicateKind.UNIQUE
+            and self.duplicate_of is not None
+        ):
             raise PreprocessingError("unique message cannot reference duplicate_of")
         if self.duplicate_kind is not DuplicateKind.UNIQUE and not self.duplicate_of:
             raise PreprocessingError("duplicate message requires duplicate_of")
