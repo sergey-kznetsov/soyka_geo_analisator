@@ -1,0 +1,37 @@
+[
+  {
+    "source_id": "vk",
+    "url": "https://vk.com/nashtatarstan",
+    "notes": "Public metadata probe only; production adapter remains official-API-only."
+  },
+  {
+    "source_id": "ok",
+    "url": "https://ok.ru/nashtatarstan",
+    "notes": "Public metadata probe only; production adapter remains official-API-only."
+  },
+  {
+    "source_id": "local-media",
+    "url": "https://www.tatar-inform.ru/",
+    "notes": "One public local-media page."
+  },
+  {
+    "source_id": "municipal-public",
+    "url": "https://gkb.kzn.ru/meriya/press-tsentr/novosti/",
+    "notes": "Official municipal portal news mirror."
+  },
+  {
+    "source_id": "dzen",
+    "url": "https://dzen.ru/tatar-inform.ru",
+    "notes": "Public regional media channel on Dzen."
+  },
+  {
+    "source_id": "pikabu",
+    "url": "https://pikabu.ru/",
+    "notes": "One public platform page."
+  },
+  {
+    "source_id": "rutube",
+    "url": "https://rutube.ru/u/kzn/videos/",
+    "notes": "Public municipal RUTUBE channel page."
+  }
+]
