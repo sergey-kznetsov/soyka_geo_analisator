@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soika-uds.dev/1.0.0/analysis-result.schema.json",
+  "title": "SOIKA UDS Development analysis result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "message_type",
+    "analysis_id",
+    "status",
+    "generated_at",
+    "partial",
+    "coverage",
+    "categories",
+    "topics",
+    "events",
+    "connections",
+    "timeline",
+    "messages",
+    "risk_summary",
+    "geojson",
+    "metadata",
+    "warnings",
+    "errors",
+    "provenance"
+  ],
+  "properties": {
+    "contract_version": {
+      "$ref": "common.schema.json#/$defs/contractVersion"
+    },
+    "message_type": {
+      "const": "analysis.result"
+    },
+    "analysis_id": {
+      "$ref": "common.schema.json#/$defs/analysisId"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "completed_with_warnings",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "generated_at": {
+      "$ref": "common.schema.json#/$defs/awareDateTime"
+    },
+    "partial": {
+      "type": "boolean"
+    },
+    "coverage": {
+      "$ref": "common.schema.json#/$defs/coverage"
+    },
+    "categories": {
+      "$ref": "common.schema.json#/$defs/objectArray"
+    },
+    "topics": {
+      "$ref": "common.schema.json#/$defs/objectArray"
+    },
+    "events": {
+      "$ref": "common.schema.json#/$defs/objectArray"
+    },
+    "connections": {
+      "$ref": "common.schema.json#/$defs/objectArray"
+    },
+    "timeline": {
+      "$ref": "common.schema.json#/$defs/objectArray"
+    },
+    "messages": {
+      "$ref": "common.schema.json#/$defs/objectArray"
+    },
+    "risk_summary": {
+      "type": "object"
+    },
+    "geojson": {
+      "$ref": "common.schema.json#/$defs/featureCollection"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/issue"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/issue"
+      }
+    },
+    "provenance": {
+      "$ref": "common.schema.json#/$defs/provenance"
+    }
+  }
+}
