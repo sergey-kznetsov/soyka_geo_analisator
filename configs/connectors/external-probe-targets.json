@@ -16,13 +16,13 @@
   },
   {
     "source_id": "municipal-public",
-    "url": "https://kzn.ru/meriya/press-tsentr/novosti/?lang=ru",
-    "notes": "One public municipal news page."
+    "url": "https://kzn.ru/",
+    "notes": "Official municipal portal home page."
   },
   {
     "source_id": "dzen",
-    "url": "https://dzen.ru/",
-    "notes": "One public platform page."
+    "url": "https://dzen.ru/tatar-inform.ru",
+    "notes": "Public regional media channel on Dzen."
   },
   {
     "source_id": "pikabu",
