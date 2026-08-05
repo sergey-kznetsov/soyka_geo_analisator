@@ -371,14 +371,21 @@ def canonicalize_url(value: str | None) -> str | None:
 
 
 def _tokens(value: str) -> tuple[str, ...]:
-    return tuple(token.casefold() for token in _TOKEN_RE.findall(value) if token.strip("-_"))
+    return tuple(
+        token.casefold()
+        for token in _TOKEN_RE.findall(value)
+        if token.strip("-_")
+    )
 
 
 def _simhash64(value: str) -> int:
     tokens = _tokens(value)
     features: Sequence[str]
     if len(tokens) >= 3:
-        features = tuple(" ".join(tokens[index : index + 3]) for index in range(len(tokens) - 2))
+        features = tuple(
+            " ".join(tokens[index : index + 3])
+            for index in range(len(tokens) - 2)
+        )
     elif tokens:
         features = tokens
     else:
@@ -537,7 +544,10 @@ def _sort_key(message: PreprocessedMessage) -> tuple[datetime, str, str, str]:
     )
 
 
-def _has_recurrence_marker(message: PreprocessedMessage, config: PreprocessingConfig) -> bool:
+def _has_recurrence_marker(
+    message: PreprocessedMessage,
+    config: PreprocessingConfig,
+) -> bool:
     folded = message.model_text.casefold()
     return any(marker in folded for marker in config.recurrence_markers)
 
