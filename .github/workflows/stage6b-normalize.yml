@@ -29,11 +29,11 @@ jobs:
             ruff==0.6.9 \
             pymorphy3==2.0.6 \
             pymorphy3-dicts-ru==2.4.417150.4580142
-          ruff check --fix --unsafe-fixes \
+          ruff format \
             soika_uds/parsers/connectors \
             tests/unit/connector_fixture_support.py \
             tests/unit/test_connector_adapters.py
-          ruff format \
+          ruff check --fix --unsafe-fixes \
             soika_uds/parsers/connectors \
             tests/unit/connector_fixture_support.py \
             tests/unit/test_connector_adapters.py
