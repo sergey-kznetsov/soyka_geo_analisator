@@ -33,9 +33,11 @@ def default_manifest_path() -> Path:
 
 
 def load_manifest(path: Path | None = None) -> list[ModelSpec]:
-    payload = json.loads((path or default_manifest_path()).read_text(encoding="utf-8"))
+    manifest_path = path or default_manifest_path()
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     if payload.get("schema_version") != 1:
         raise ValueError("unsupported model manifest schema")
+
     models = [
         ModelSpec(
             name=str(raw["name"]),
@@ -53,7 +55,10 @@ def load_manifest(path: Path | None = None) -> list[ModelSpec]:
 
 def tree_digest(path: Path) -> str:
     digest = hashlib.sha256()
-    for file_path in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
+    model_files = sorted(
+        candidate for candidate in path.rglob("*") if candidate.is_file()
+    )
+    for file_path in model_files:
         relative = file_path.relative_to(path).as_posix().encode("utf-8")
         digest.update(len(relative).to_bytes(8, "big"))
         digest.update(relative)
@@ -81,9 +86,13 @@ def lock_manifest(source: Path | None, destination: Path) -> dict[str, Any]:
                 "required": spec.required,
             }
         )
+
     payload: dict[str, Any] = {"schema_version": 1, "models": locked}
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    destination.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return payload
 
 
@@ -95,6 +104,7 @@ def install_models(manifest: Path, destination: Path) -> list[InstalledModel]:
     for spec in load_manifest(manifest):
         if len(spec.revision) < 7 or spec.revision in {"main", "master"}:
             raise ValueError(f"model {spec.name} is not locked: {spec.revision}")
+
         model_path = destination / spec.name
         model_path.mkdir(parents=True, exist_ok=True)
         snapshot_download(
@@ -112,13 +122,13 @@ def install_models(manifest: Path, destination: Path) -> list[InstalledModel]:
                 sha256=tree_digest(model_path),
             )
         )
+
+    registry_payload = {
+        "schema_version": 1,
+        "models": [asdict(item) for item in installed],
+    }
     (destination / "installed-models.json").write_text(
-        json.dumps(
-            {"schema_version": 1, "models": [asdict(item) for item in installed]},
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
+        json.dumps(registry_payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     return installed
@@ -127,7 +137,12 @@ def install_models(manifest: Path, destination: Path) -> list[InstalledModel]:
 def verify_models(destination: Path) -> dict[str, Any]:
     registry_path = destination / "installed-models.json"
     if not registry_path.is_file():
-        return {"ok": False, "error": f"registry is missing: {registry_path}", "models": []}
+        return {
+            "ok": False,
+            "error": f"registry is missing: {registry_path}",
+            "models": [],
+        }
+
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
     results: list[dict[str, Any]] = []
     for raw in registry.get("models", []):
@@ -143,4 +158,6 @@ def verify_models(destination: Path) -> dict[str, Any]:
                 "ok": actual == expected,
             }
         )
-    return {"ok": bool(results) and all(item["ok"] for item in results), "models": results}
+
+    all_valid = bool(results) and all(item["ok"] for item in results)
+    return {"ok": all_valid, "models": results}
