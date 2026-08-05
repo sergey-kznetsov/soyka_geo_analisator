@@ -3,6 +3,8 @@ name: stage6a-bootstrap
 on:
   push:
     branches: [agent/prepare-source-connectors]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
