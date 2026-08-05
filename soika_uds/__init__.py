@@ -74,12 +74,31 @@ from .parsers import (
     SourceResearchRecord,
 )
 from .prediction import Prediction, PredictionFormatError
+from .preprocessing import ALGORITHM_VERSION as PREPROCESSING_ALGORITHM_VERSION
+from .preprocessing import (
+    DuplicateDecision,
+    DuplicateKind,
+    LanguageResult,
+    MessageDecision,
+    PreprocessedMessage,
+    PreprocessingConfig,
+    PreprocessingResult,
+    PreprocessingStageHandler,
+    PreprocessingStats,
+    TransformationTrace,
+    canonicalize_url,
+    detect_language,
+    preprocess_messages,
+    source_message_from_dict,
+    source_message_to_dict,
+)
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
     "PIPELINE_STAGES",
+    "PREPROCESSING_ALGORITHM_VERSION",
     "SUPPORTED_CONTRACT_VERSIONS",
     "AccessMethod",
     "AnalysisRequestV1",
@@ -98,6 +117,8 @@ __all__ = [
     "CoverageSummary",
     "DataCategory",
     "DataProtectionPolicy",
+    "DuplicateDecision",
+    "DuplicateKind",
     "FileJobStore",
     "FileParserCheckpointStore",
     "IdempotencyConflictError",
@@ -108,7 +129,9 @@ __all__ = [
     "JobRecord",
     "JobStatus",
     "JobStatusV1",
+    "LanguageResult",
     "MessageClassification",
+    "MessageDecision",
     "MessageType",
     "MissingStageHandlerError",
     "ModelResult",
@@ -126,6 +149,11 @@ __all__ = [
     "PrecisionLevel",
     "Prediction",
     "PredictionFormatError",
+    "PreprocessedMessage",
+    "PreprocessingConfig",
+    "PreprocessingResult",
+    "PreprocessingStageHandler",
+    "PreprocessingStats",
     "ResultProvenance",
     "RetryPolicy",
     "RetryableStageError",
@@ -140,10 +168,16 @@ __all__ = [
     "StageExecutionError",
     "StageResult",
     "TerritoryContext",
+    "TransformationTrace",
     "assert_idempotent_request",
+    "canonicalize_url",
     "contract_info",
+    "detect_language",
     "export_schema_bundle",
     "parse_contract_document",
+    "preprocess_messages",
     "schema_bundle_digest",
+    "source_message_from_dict",
+    "source_message_to_dict",
     "__version__",
 ]
