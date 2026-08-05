@@ -557,6 +557,13 @@ def _is_repeated_appeal(
     representative: PreprocessedMessage,
     config: PreprocessingConfig,
 ) -> bool:
+    if current.source != representative.source:
+        return False
+    if (
+        current.fingerprints["identity_sha256"]
+        == representative.fingerprints["identity_sha256"]
+    ):
+        return False
     if _has_recurrence_marker(current, config):
         return True
     if current.published_at_utc is None or representative.published_at_utc is None:
