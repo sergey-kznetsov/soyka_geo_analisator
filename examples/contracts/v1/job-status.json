@@ -1,0 +1,15 @@
+{
+  "contract_version": "1.0.0",
+  "message_type": "analysis.status",
+  "analysis_id": "analysis-2026-0001",
+  "status": "geocoding",
+  "updated_at": "2026-08-05T08:21:30Z",
+  "progress_percent": 62,
+  "stage": "geocoding",
+  "message": "Выполняется географическая привязка сообщений",
+  "attempt": 1,
+  "processed_items": 177,
+  "total_items": 286,
+  "warnings": [],
+  "errors": []
+}
