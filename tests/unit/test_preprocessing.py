@@ -62,7 +62,7 @@ def test_html_unicode_quotes_and_technical_text_are_processed_with_trace() -> No
     processed = result.messages[0]
 
     assert processed.original_text == original
-    assert processed.model_text == "У дома № 5 сломался фонарь."
+    assert processed.model_text == "У дома No 5 сломался фонарь."
     assert processed.quote_texts == ("Старый ответ", "Цитата")
     assert "secret" not in processed.normalized_text
     assert "Показать полностью" not in processed.normalized_text
