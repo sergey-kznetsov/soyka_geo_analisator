@@ -1,0 +1,62 @@
+{
+  "contract_version": "1.0.0",
+  "message_type": "analysis.result",
+  "analysis_id": "analysis-2026-0001",
+  "status": "completed_with_warnings",
+  "generated_at": "2026-08-05T08:29:45Z",
+  "partial": true,
+  "coverage": {
+    "sources_requested": 2,
+    "sources_available": 1,
+    "messages_collected": 1240,
+    "messages_relevant": 286,
+    "messages_geocoded": 214,
+    "messages_low_confidence": 34
+  },
+  "categories": [
+    {
+      "name": "ЖКХ",
+      "count": 94,
+      "share": 0.329
+    }
+  ],
+  "topics": [],
+  "events": [],
+  "connections": [],
+  "timeline": [],
+  "messages": [],
+  "risk_summary": {
+    "score": 6.7,
+    "level": "elevated"
+  },
+  "geojson": {
+    "type": "FeatureCollection",
+    "features": []
+  },
+  "metadata": {
+    "territory_radius_meters": 1500
+  },
+  "warnings": [
+    {
+      "code": "SOURCE_UNAVAILABLE",
+      "message": "Один из запрошенных источников был недоступен",
+      "retryable": true,
+      "stage": "collecting",
+      "details": {
+        "source": "public_comments"
+      }
+    }
+  ],
+  "errors": [],
+  "provenance": {
+    "soika_version": "0.4.0",
+    "schema_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "models": {
+      "category_classifier": "revision-placeholder"
+    },
+    "algorithms": {
+      "event_detection": "1.0.0",
+      "risk_scoring": "1.0.0"
+    }
+  }
+}
