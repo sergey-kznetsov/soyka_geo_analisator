@@ -95,6 +95,28 @@ jobs:
                   raise SystemExit("stage 6 heading not found")
               text = text.replace(heading, heading + block, 1)
           plan.write_text(text, encoding="utf-8")
+
+          models = Path("soika_uds/parsers/connectors/models.py")
+          text = models.read_text(encoding="utf-8")
+          old = (
+              "        if self.cost_model is ConnectorCostModel.OPTIONAL_PAID:\n"
+              "            if not self.customer_supplied_credentials:\n"
+              "                raise ConnectorDefinitionError(\n"
+              "                    \"optional paid connectors require customer-supplied credentials\"\n"
+              "                )\n"
+          )
+          new = (
+              "        if (\n"
+              "            self.cost_model is ConnectorCostModel.OPTIONAL_PAID\n"
+              "            and not self.customer_supplied_credentials\n"
+              "        ):\n"
+              "            raise ConnectorDefinitionError(\n"
+              "                \"optional paid connectors require customer-supplied credentials\"\n"
+              "            )\n"
+          )
+          if old not in text:
+              raise SystemExit("connector lint rewrite marker not found")
+          models.write_text(text.replace(old, new, 1), encoding="utf-8")
           PY
 
       - name: Validate prepared connectors
@@ -104,7 +126,7 @@ jobs:
             ruff==0.6.9 \
             pymorphy3==2.0.6 \
             pymorphy3-dicts-ru==2.4.417150.4580142
-          ruff check --fix --unsafe-fixes \
+          ruff check --fix \
             soika_uds/parsers/connectors \
             tests/unit/test_connector_preparation.py
           ruff format \
