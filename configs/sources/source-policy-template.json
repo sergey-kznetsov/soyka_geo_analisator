@@ -1,0 +1,85 @@
+{
+  "source_id": "example-source",
+  "display_name": "Example source under review",
+  "owner": "Replace with source owner",
+  "access_method": "public_web",
+  "permission_status": "review_required",
+  "jurisdictions": [
+    "RU"
+  ],
+  "legal_basis": "TO_BE_REVIEWED",
+  "terms_url": "https://example.invalid/terms",
+  "privacy_url": "https://example.invalid/privacy",
+  "robots_requirement": "required",
+  "research": {
+    "collection_plan": "Describe exact pages, fields, pagination and update schedule.",
+    "official_access_available": "unknown",
+    "permission_required": "unknown",
+    "copyright_constraints": "TO_BE_REVIEWED",
+    "terms_constraints": "TO_BE_REVIEWED",
+    "personal_data_notes": "Describe personal data and minimization measures.",
+    "security_risks": [
+      "untrusted HTML",
+      "SSRF",
+      "oversized responses"
+    ],
+    "deletion_or_correction_process": "Define deletion and correction workflow.",
+    "rate_limit_source": "Record API documentation, terms or written permission.",
+    "reviewed_sources": [
+      "https://example.invalid/terms",
+      "https://example.invalid/robots.txt"
+    ],
+    "unresolved_questions": [
+      "Is automated collection permitted?",
+      "Is written permission required?",
+      "May derived analytics be stored?"
+    ],
+    "robots_url": "https://example.invalid/robots.txt"
+  },
+  "data": {
+    "categories": [
+      "public_text"
+    ],
+    "allowed_fields": [
+      "external_id",
+      "text",
+      "published_at"
+    ],
+    "retention_days": 30,
+    "author_identifier_mode": "drop",
+    "store_raw_response": false,
+    "allow_special_categories": false,
+    "allow_biometric": false,
+    "allow_child_data": false,
+    "deletion_supported": true,
+    "purpose": "urban issue analysis"
+  },
+  "security": {
+    "allowed_domains": [
+      "example.invalid"
+    ],
+    "allowed_content_types": [
+      "text/html"
+    ],
+    "max_response_bytes": 2000000,
+    "max_redirects": 2,
+    "https_only": true,
+    "block_private_networks": true,
+    "allow_subdomains": false,
+    "user_agent": "SOIKA-UDS/0.6 parser"
+  },
+  "rate_limit": {
+    "requests_per_minute": 5,
+    "burst": 1,
+    "max_concurrency": 1,
+    "timeout_seconds": 15,
+    "max_retries": 2,
+    "backoff_seconds": 2
+  },
+  "allowed_purposes": [
+    "urban issue analysis"
+  ],
+  "parser_version": "0.0.0",
+  "enabled": false,
+  "notes": "Template only. Activation is forbidden until legal and security review."
+}
