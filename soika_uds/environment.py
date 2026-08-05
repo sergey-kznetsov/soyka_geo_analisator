@@ -68,7 +68,8 @@ def _run_version_command(spec: CommandVersion) -> RuntimeCheck:
             detail=f"command unavailable: {exc}",
         )
 
-    output = "\n".join(part for part in (process.stdout, process.stderr) if part).strip()
+    output_parts = (process.stdout, process.stderr)
+    output = "\n".join(part for part in output_parts if part).strip()
     version_match = re.search(r"\d+\.\d+(?:\.\d+)?", output)
     version = version_match.group(0) if version_match else "unknown"
     return RuntimeCheck(
@@ -175,8 +176,9 @@ def readiness_checks(*, repository_root: Path | None = None) -> list[RuntimeChec
 
 def readiness_payload(*, repository_root: Path | None = None) -> dict[str, object]:
     checks = readiness_checks(repository_root=repository_root)
+    ready = all(check.ok for check in checks if check.required)
     return {
-        "status": "ready" if all(check.ok for check in checks if check.required) else "not_ready",
+        "status": "ready" if ready else "not_ready",
         "service": "soika-uds-development",
         "checks": [asdict(check) for check in checks],
     }
