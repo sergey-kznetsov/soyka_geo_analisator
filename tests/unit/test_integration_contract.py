@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 
@@ -179,7 +179,7 @@ def test_requested_at_offset_is_normalized_to_utc():
             5,
             12,
             18,
-            tzinfo=UTC + timedelta(hours=4),
+            tzinfo=timezone(timedelta(hours=4)),
         )
     )
 
