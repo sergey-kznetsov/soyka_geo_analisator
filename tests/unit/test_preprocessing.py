@@ -78,7 +78,7 @@ def test_html_unicode_quotes_and_technical_text_are_processed_with_trace() -> No
     assert all(
         left.output_sha256 == right.input_sha256
         for left, right in zip(
-            processed.transformations,
+            processed.transformations[:-1],
             processed.transformations[1:],
             strict=True,
         )
