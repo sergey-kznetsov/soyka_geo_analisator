@@ -1,0 +1,379 @@
+{
+  "schema_version": "1.0.0",
+  "result_kind": "fixture_parser_runner_integration",
+  "generated_at": "2026-08-05T12:00:00+00:00",
+  "all_sources_returned_messages": true,
+  "transport_urls": [
+    "https://api.vk.com/method/wall.get?owner_id=-1&offset=0&count=100&filter=owner&v=5.199",
+    "https://api.vk.com/method/wall.getComments?owner_id=-1&post_id=10&offset=0&count=100&thread_items_count=10&need_likes=0&v=5.199",
+    "https://api.ok.ru/fb.do?method=discussions.getComments&discussionId=1&discussionType=GROUP_TOPIC&direction=FORWARD&count=100&format=json&application_key=fixture-app&access_token=fixture-token&sig=3c5525e3d3def49cd8ae44cfb0e48207",
+    "https://media.example.ru/rss.xml",
+    "https://municipal.example.ru/sitemap.xml",
+    "https://municipal.example.ru/news/1",
+    "https://dzen.ru/fixture",
+    "https://pikabu.ru/community/fixture",
+    "https://rutube.ru/u/fixture/videos/"
+  ],
+  "sources": {
+    "vk": {
+      "coverage": {
+        "source_id": "vk",
+        "status": "completed",
+        "pages_collected": 2,
+        "raw_items_seen": 2,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0,
+        "started_at": "2026-08-05T12:00:00Z",
+        "finished_at": "2026-08-05T12:00:00Z",
+        "warnings": [],
+        "errors": []
+      },
+      "final_checkpoint": {
+        "version": 1,
+        "adapter_checkpoint": {
+          "community_index": 1,
+          "wall_offset": 0,
+          "comment_queue": []
+        },
+        "seen_external_ids_sha256": [
+          "6619c1cb0e1fbaa2b728e87e51ad457059d130d439f7c28c38c72d51cce45cca",
+          "a0bbb10ab8d82cea1c824bbaa6be674c7286beac7dfb649cf0127762677acb7f"
+        ],
+        "pages_collected": 2,
+        "raw_items_seen": 2,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0
+      },
+      "messages": [
+        {
+          "source": "vk",
+          "external_id": "post:-1:10",
+          "text": "На улице Центральной ремонтируют освещение",
+          "published_at": "2026-08-05T12:00:00+00:00",
+          "url": "https://vk.com/wall-1_10",
+          "metadata": {
+            "kind": "post",
+            "owner_id": -1,
+            "post_id": 10
+          }
+        },
+        {
+          "source": "vk",
+          "external_id": "comment:-1:10:20",
+          "text": "Во дворе после дождя снова стоит вода",
+          "published_at": "2026-08-05T12:02:00+00:00",
+          "url": "https://vk.com/wall-1_10?reply=20",
+          "metadata": {
+            "kind": "comment",
+            "owner_id": -1,
+            "post_id": 10
+          }
+        }
+      ]
+    },
+    "ok": {
+      "coverage": {
+        "source_id": "ok",
+        "status": "completed",
+        "pages_collected": 1,
+        "raw_items_seen": 1,
+        "messages_emitted": 1,
+        "duplicate_messages": 0,
+        "rejected_messages": 0,
+        "started_at": "2026-08-05T12:00:00Z",
+        "finished_at": "2026-08-05T12:00:00Z",
+        "warnings": [],
+        "errors": []
+      },
+      "final_checkpoint": {
+        "version": 1,
+        "adapter_checkpoint": {
+          "discussion_index": 1,
+          "anchor": null
+        },
+        "seen_external_ids_sha256": [
+          "4dd64901531d2c93eb3f8c18a21331b23f4cbfd4ba3b652880de88a42475efd7"
+        ],
+        "pages_collected": 1,
+        "raw_items_seen": 1,
+        "messages_emitted": 1,
+        "duplicate_messages": 0,
+        "rejected_messages": 0
+      },
+      "messages": [
+        {
+          "source": "ok",
+          "external_id": "comment:GROUP_TOPIC:1:ok-1",
+          "text": "Остановка у школы требует ремонта",
+          "published_at": "2026-08-05T12:04:00+00:00",
+          "url": null,
+          "metadata": {
+            "kind": "comment",
+            "discussion_id": "1",
+            "discussion_type": "GROUP_TOPIC"
+          }
+        }
+      ]
+    },
+    "local-media": {
+      "coverage": {
+        "source_id": "local-media",
+        "status": "completed",
+        "pages_collected": 1,
+        "raw_items_seen": 1,
+        "messages_emitted": 1,
+        "duplicate_messages": 0,
+        "rejected_messages": 0,
+        "started_at": "2026-08-05T12:00:00Z",
+        "finished_at": "2026-08-05T12:00:00Z",
+        "warnings": [],
+        "errors": []
+      },
+      "final_checkpoint": {
+        "version": 1,
+        "adapter_checkpoint": {
+          "queue": []
+        },
+        "seen_external_ids_sha256": [
+          "c790b725e8c993d331a65bb071611aa41eb60d946fcbcc1fdf6c524e67afd4ab"
+        ],
+        "pages_collected": 1,
+        "raw_items_seen": 1,
+        "messages_emitted": 1,
+        "duplicate_messages": 0,
+        "rejected_messages": 0
+      },
+      "messages": [
+        {
+          "source": "local-media",
+          "external_id": "feed:b68fc38524e38069735c224cdd86349a",
+          "text": "Local media. Road works started",
+          "published_at": "2026-08-05T12:00:00+00:00",
+          "url": "https://media.example.ru/news/1",
+          "metadata": {
+            "kind": "feed_entry",
+            "title": "Local media"
+          }
+        }
+      ]
+    },
+    "municipal-public": {
+      "coverage": {
+        "source_id": "municipal-public",
+        "status": "completed",
+        "pages_collected": 2,
+        "raw_items_seen": 3,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0,
+        "started_at": "2026-08-05T12:00:00Z",
+        "finished_at": "2026-08-05T12:00:00Z",
+        "warnings": [],
+        "errors": []
+      },
+      "final_checkpoint": {
+        "version": 1,
+        "adapter_checkpoint": {
+          "queue": []
+        },
+        "seen_external_ids_sha256": [
+          "3b222bc7b990eb1277d3205a26f29801e9dd84a09ce961faef59ad929dd3c138",
+          "cbd818cd23d22f1f7979fd2ed51fa01c37f6c53db27456e75816dcd2e1c3f010"
+        ],
+        "pages_collected": 2,
+        "raw_items_seen": 3,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0
+      },
+      "messages": [
+        {
+          "source": "municipal-public",
+          "external_id": "document:9f55ffbac75183fb454e8371045594cc",
+          "text": "Fixture municipal.example.ru. Муниципалитет сообщил о ремонте тротуара",
+          "published_at": "2026-08-05T12:05:00+00:00",
+          "url": "https://municipal.example.ru/news/1",
+          "metadata": {
+            "kind": "document",
+            "title": "Fixture municipal.example.ru"
+          }
+        },
+        {
+          "source": "municipal-public",
+          "external_id": "comment:b92f49b5decce3ed4dfeabaeb904b183",
+          "text": "Комментарий: Муниципалитет сообщил о ремонте тротуара",
+          "published_at": "2026-08-05T12:06:00+00:00",
+          "url": "https://municipal.example.ru/news/1#comment-1",
+          "metadata": {
+            "kind": "comment",
+            "document_url": "https://municipal.example.ru/news/1"
+          }
+        }
+      ]
+    },
+    "dzen": {
+      "coverage": {
+        "source_id": "dzen",
+        "status": "completed",
+        "pages_collected": 1,
+        "raw_items_seen": 2,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0,
+        "started_at": "2026-08-05T12:00:00Z",
+        "finished_at": "2026-08-05T12:00:00Z",
+        "warnings": [],
+        "errors": []
+      },
+      "final_checkpoint": {
+        "version": 1,
+        "adapter_checkpoint": {
+          "queue": []
+        },
+        "seen_external_ids_sha256": [
+          "2096d827aa218670ca674aa7030ec7cf4e4f3e49d6f3eacd566c8cce2ac3ca3e",
+          "7a79e79b89313de2749215230c5bd2180e6f9e6b14814b43c2591807defdc25c"
+        ],
+        "pages_collected": 1,
+        "raw_items_seen": 2,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0
+      },
+      "messages": [
+        {
+          "source": "dzen",
+          "external_id": "document:0fdc158434d2cb6b7f88db55056056b1",
+          "text": "Fixture dzen.ru. Жители обсудили благоустройство сквера",
+          "published_at": "2026-08-05T12:05:00+00:00",
+          "url": "https://dzen.ru/fixture",
+          "metadata": {
+            "kind": "document",
+            "title": "Fixture dzen.ru"
+          }
+        },
+        {
+          "source": "dzen",
+          "external_id": "comment:afcc8d628622544beb4804cef94b65a2",
+          "text": "Комментарий: Жители обсудили благоустройство сквера",
+          "published_at": "2026-08-05T12:06:00+00:00",
+          "url": "https://dzen.ru/fixture#comment-1",
+          "metadata": {
+            "kind": "comment",
+            "document_url": "https://dzen.ru/fixture"
+          }
+        }
+      ]
+    },
+    "pikabu": {
+      "coverage": {
+        "source_id": "pikabu",
+        "status": "completed",
+        "pages_collected": 1,
+        "raw_items_seen": 2,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0,
+        "started_at": "2026-08-05T12:00:00Z",
+        "finished_at": "2026-08-05T12:00:00Z",
+        "warnings": [],
+        "errors": []
+      },
+      "final_checkpoint": {
+        "version": 1,
+        "adapter_checkpoint": {
+          "queue": []
+        },
+        "seen_external_ids_sha256": [
+          "2dbdbf6d284b4b4c8b313a9c72f69f77294c21e72b392564382fe633198b0dea",
+          "3984bb6c2d64bf504520744dd05d8c828bf6e3a000bbef7f3a4bb18453c803fc"
+        ],
+        "pages_collected": 1,
+        "raw_items_seen": 2,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0
+      },
+      "messages": [
+        {
+          "source": "pikabu",
+          "external_id": "document:e8fc393baf362e72c1413577d19907e6",
+          "text": "Fixture pikabu.ru. Пользователи сообщили о яме на дороге",
+          "published_at": "2026-08-05T12:05:00+00:00",
+          "url": "https://pikabu.ru/community/fixture",
+          "metadata": {
+            "kind": "document",
+            "title": "Fixture pikabu.ru"
+          }
+        },
+        {
+          "source": "pikabu",
+          "external_id": "comment:be543cc043932d2eec8d49d21c3cf9f9",
+          "text": "Комментарий: Пользователи сообщили о яме на дороге",
+          "published_at": "2026-08-05T12:06:00+00:00",
+          "url": "https://pikabu.ru/community/fixture#comment-1",
+          "metadata": {
+            "kind": "comment",
+            "document_url": "https://pikabu.ru/community/fixture"
+          }
+        }
+      ]
+    },
+    "rutube": {
+      "coverage": {
+        "source_id": "rutube",
+        "status": "completed",
+        "pages_collected": 1,
+        "raw_items_seen": 2,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0,
+        "started_at": "2026-08-05T12:00:00Z",
+        "finished_at": "2026-08-05T12:00:00Z",
+        "warnings": [],
+        "errors": []
+      },
+      "final_checkpoint": {
+        "version": 1,
+        "adapter_checkpoint": {
+          "queue": []
+        },
+        "seen_external_ids_sha256": [
+          "1f79e02f32fcb97e3d893d23032c5f2c396f661a7e8e1038a023071a30e17e71",
+          "f76adae01501f5fbc42e5b07dbfc1fbd449420e2eaab8b7e7cbf8c66d18e585d"
+        ],
+        "pages_collected": 1,
+        "raw_items_seen": 2,
+        "messages_emitted": 2,
+        "duplicate_messages": 0,
+        "rejected_messages": 0
+      },
+      "messages": [
+        {
+          "source": "rutube",
+          "external_id": "document:2eb866a672d0e45de334367662f71cc2",
+          "text": "Fixture rutube.ru. Видео о ремонте городской набережной",
+          "published_at": "2026-08-05T12:05:00+00:00",
+          "url": "https://rutube.ru/u/fixture/videos/",
+          "metadata": {
+            "kind": "document",
+            "title": "Fixture rutube.ru"
+          }
+        },
+        {
+          "source": "rutube",
+          "external_id": "comment:4510e54d4d4f7f8760c67eedc422b33d",
+          "text": "Комментарий: Видео о ремонте городской набережной",
+          "published_at": "2026-08-05T12:06:00+00:00",
+          "url": "https://rutube.ru/u/fixture/videos/#comment-1",
+          "metadata": {
+            "kind": "comment",
+            "document_url": "https://rutube.ru/u/fixture/videos/"
+          }
+        }
+      ]
+    }
+  }
+}
