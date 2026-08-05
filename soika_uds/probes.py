@@ -29,7 +29,11 @@ class ProbeHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/readyz":
             payload = readiness_payload(repository_root=self.repository_root)
-            status = HTTPStatus.OK if payload["status"] == "ready" else HTTPStatus.SERVICE_UNAVAILABLE
+            status = (
+                HTTPStatus.OK
+                if payload["status"] == "ready"
+                else HTTPStatus.SERVICE_UNAVAILABLE
+            )
             self._write_json(payload, status)
             return
         self._write_json({"error": "not_found"}, HTTPStatus.NOT_FOUND)
