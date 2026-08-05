@@ -1,0 +1,100 @@
+# syntax=docker/dockerfile:1.7
+
+ARG PYTHON_IMAGE=python:3.11.15-slim-bookworm@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d939d098c647482bcad5cba
+ARG POETRY_VERSION=2.4.1
+
+FROM ${PYTHON_IMAGE} AS builder
+
+ARG POETRY_VERSION
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_IN_PROJECT=true
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        g++ \
+        gcc \
+        libgdal-dev \
+        libgeos-dev \
+        libopenblas-dev \
+        libproj-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install "poetry==${POETRY_VERSION}"
+
+COPY pyproject.toml poetry.lock ./
+RUN poetry install --only main --no-root --sync
+
+COPY README.md LICENSE ./
+COPY factfinder ./factfinder
+COPY pymorphy2 ./pymorphy2
+COPY soika_uds ./soika_uds
+RUN poetry install --only main --sync
+
+FROM ${PYTHON_IMAGE} AS runtime-base
+
+ARG EXPECTED_GDAL=3.6
+ARG EXPECTED_GEOS=3.11
+ARG EXPECTED_PROJ=9.1
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PATH=/app/.venv/bin:${PATH} \
+    PYTHONFAULTHANDLER=1 \
+    PYTHONUNBUFFERED=1 \
+    SOIKA_DATA_DIR=/var/lib/soika \
+    SOIKA_MODEL_DIR=/var/cache/soika/models \
+    SOIKA_EXPECTED_GDAL=${EXPECTED_GDAL} \
+    SOIKA_EXPECTED_GEOS=${EXPECTED_GEOS} \
+    SOIKA_EXPECTED_PROJ=${EXPECTED_PROJ}
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gdal-bin \
+        libgdal32 \
+        libgeos-c1v5 \
+        libgomp1 \
+        libopenblas0-pthread \
+        libproj25 \
+        proj-bin \
+        tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && test "$(gdal-config --version | cut -d. -f1-2)" = "${EXPECTED_GDAL}" \
+    && test "$(geos-config --version | cut -d. -f1-2)" = "${EXPECTED_GEOS}" \
+    && proj 2>&1 | grep -q "Rel. ${EXPECTED_PROJ}"
+
+RUN groupadd --gid 10001 soika \
+    && useradd --uid 10001 --gid soika --create-home --shell /usr/sbin/nologin soika \
+    && mkdir -p /app /var/lib/soika /var/cache/soika/models \
+    && chown -R soika:soika /app /var/lib/soika /var/cache/soika
+
+WORKDIR /app
+COPY --from=builder --chown=soika:soika /app /app
+
+USER soika
+EXPOSE 8080
+VOLUME ["/var/lib/soika", "/var/cache/soika/models"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).read()"
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["soika-uds", "serve-probes", "--host", "0.0.0.0", "--port", "8080", "--repository-root", "/app"]
+
+FROM runtime-base AS cpu
+ENV SOIKA_DEVICE=cpu \
+    SOIKA_REQUIRE_CUDA=false
+
+FROM runtime-base AS gpu
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    NVIDIA_VISIBLE_DEVICES=all \
+    SOIKA_DEVICE=cuda \
+    SOIKA_REQUIRE_CUDA=true
+
+FROM cpu AS production
