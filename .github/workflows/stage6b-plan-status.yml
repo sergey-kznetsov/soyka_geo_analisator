@@ -1,0 +1,59 @@
+name: stage6b-plan-status
+
+on:
+  push:
+    branches: [agent/stage6b-parser-adapters]
+
+permissions:
+  contents: write
+
+jobs:
+  update-plan:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/stage6b-parser-adapters
+
+      - name: Mark stage 6B complete in development plan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/DEVELOPMENT_PLAN.md")
+          text = path.read_text(encoding="utf-8")
+          old = (
+              "Подключение этих определений к `ParserAdapter`, `ParserRegistry` "
+              "и `ParserRunner` выполняется на этапе 6B.\n"
+          )
+          new = old + (
+              "\n**Этап 6B: реализация и подключение адаптеров — выполнено "
+              "5 августа 2026 года.**\n\n"
+              "Реализованы и зарегистрированы адаптеры VK, Одноклассников, "
+              "локальных СМИ, муниципальных публичных источников, Дзен, Pikabu "
+              "и RUTUBE. Добавлены fixture-based и mock-transport integration "
+              "tests, controlled external probe и сохранённые результаты. "
+              "Подробности: `docs/STAGE_6B_ADAPTERS.md`, "
+              "`docs/STAGE_6B_FIXTURE_RESULTS.json` и "
+              "`docs/STAGE_6B_EXTERNAL_RESULTS.json`.\n"
+          )
+          if new.strip() not in text:
+              if text.count(old) != 1:
+                  raise SystemExit("stage 6B insertion point not found exactly once")
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Remove temporary workflow
+        run: rm .github/workflows/stage6b-plan-status.yml
+
+      - name: Commit development plan status
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Mark stage 6B complete in development plan"
+          git push origin HEAD:agent/stage6b-parser-adapters
