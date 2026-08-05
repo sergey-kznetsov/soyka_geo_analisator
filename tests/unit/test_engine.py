@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from soika_uds import Prediction, SoikaEngine, SourceMessage
 
@@ -27,7 +27,7 @@ def test_engine_returns_structured_category_and_topic():
         source="portal",
         external_id="1",
         text="Затопило двор",
-        published_at=datetime(2026, 8, 5, tzinfo=timezone.utc),
+        published_at=datetime(2026, 8, 5, tzinfo=UTC),
     )
 
     result = engine.classify_message(message)
