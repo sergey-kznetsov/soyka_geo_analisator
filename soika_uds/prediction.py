@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 
 class PredictionFormatError(ValueError):
@@ -57,7 +58,9 @@ def _unwrap_pipeline_payload(payload: Any) -> Sequence[Mapping[str, Any]]:
     raise PredictionFormatError("unsupported nested classifier output")
 
 
-def normalize_pipeline_output(payload: Any, *, limit: int | None = None) -> list[Prediction]:
+def normalize_pipeline_output(
+    payload: Any, *, limit: int | None = None
+) -> list[Prediction]:
     """Normalize a transformer pipeline result without changing candidate order."""
 
     if limit is not None and limit < 1:
