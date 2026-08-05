@@ -29,23 +29,25 @@ class CommandVersion:
     name: str
     command: tuple[str, ...]
     expected_prefix: str
+    accepted_exit_codes: tuple[int, ...] = (0,)
 
 
 SYSTEM_LIBRARIES: Final[tuple[CommandVersion, ...]] = (
     CommandVersion(
         "gdal",
-        ("gdal-config", "--version"),
+        ("gdalinfo", "--version"),
         os.getenv("SOIKA_EXPECTED_GDAL", "3.6"),
     ),
     CommandVersion(
         "geos",
-        ("geos-config", "--version"),
+        ("dpkg-query", "-W", "-f=${Version}", "libgeos-c1v5"),
         os.getenv("SOIKA_EXPECTED_GEOS", "3.11"),
     ),
     CommandVersion(
         "proj",
         ("proj",),
         os.getenv("SOIKA_EXPECTED_PROJ", "9.1"),
+        (0, 1),
     ),
 )
 
@@ -71,7 +73,10 @@ def _run_version_command(spec: CommandVersion) -> RuntimeCheck:
     version = version_match.group(0) if version_match else "unknown"
     return RuntimeCheck(
         name=f"system:{spec.name}",
-        ok=process.returncode in (0, 1) and version.startswith(spec.expected_prefix),
+        ok=(
+            process.returncode in spec.accepted_exit_codes
+            and version.startswith(spec.expected_prefix)
+        ),
         detail=(
             f"detected={version}; expected_prefix={spec.expected_prefix}; "
             f"exit_code={process.returncode}"
