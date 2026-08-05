@@ -1,11 +1,44 @@
-from .event_detection import EventDetection
-from .geocoder import Geocoder
-from .text_classifier import TextClassifier
-from .text_classifier_topics import TextClassifierTopics
+"""Lazy exports for legacy ``factfinder.src`` imports."""
+
+from __future__ import annotations
+
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
 
 __all__ = [
     "EventDetection",
+    "Geocoder",
     "TextClassifier",
     "TextClassifierTopics",
-    "Geocoder",
 ]
+
+_EXPORTS = {
+    "EventDetection": ("factfinder.src.event_detection", "EventDetection"),
+    "Geocoder": ("factfinder.src.geocoder", "Geocoder"),
+    "TextClassifier": ("factfinder.src.text_classifier", "TextClassifier"),
+    "TextClassifierTopics": (
+        "factfinder.src.text_classifier_topics",
+        "TextClassifierTopics",
+    ),
+}
+
+if TYPE_CHECKING:
+    from .event_detection import EventDetection
+    from .geocoder import Geocoder
+    from .text_classifier import TextClassifier
+    from .text_classifier_topics import TextClassifierTopics
+
+
+def __getattr__(name: str) -> Any:
+    try:
+        module_name, attribute_name = _EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
+
+    value = getattr(import_module(module_name), attribute_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))
