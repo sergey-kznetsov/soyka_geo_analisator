@@ -1,0 +1,43 @@
+name: quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-and-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.14"
+          cache: pip
+
+      - name: Install quality tools
+        run: python -m pip install --upgrade pip pytest==7.4.4 ruff==0.6.9
+
+      - name: Compile Python sources
+        run: python -m compileall -q factfinder soika_uds
+
+      - name: Lint normalized code
+        run: >-
+          ruff check
+          soika_uds
+          factfinder/__init__.py
+          factfinder/src/__init__.py
+          factfinder/src/_classifier_base.py
+          factfinder/src/text_classifier.py
+          factfinder/src/text_classifier_topics.py
+          tests/unit
+
+      - name: Run deterministic unit tests
+        run: python -m pytest -q tests/unit
