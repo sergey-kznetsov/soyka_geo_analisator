@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "soika-uds-development"
-version = "0.2.0"
+version = "0.3.0"
 description = "Server-side urban comment analysis module for the Geo Analyzer ecosystem"
 authors = [
     "SOIKA upstream contributors",
@@ -11,11 +11,15 @@ license = "MIT"
 packages = [
     { include = "factfinder" },
     { include = "soika_uds" },
+    { include = "pymorphy2" },
 ]
-include = ["factfinder/src/*.csv"]
+include = [
+    "factfinder/src/*.csv",
+    "models/*.json",
+]
 
 [tool.poetry.dependencies]
-python = ">=3.10.6,<3.11"
+python = ">=3.11,<3.12"
 pandas = "2.0.1"
 matplotlib = "3.7.1"
 seaborn = "0.12.2"
@@ -29,13 +33,14 @@ flair = "0.12.2"
 networkx = "3.1"
 osm2geojson = "0.2.3"
 osmnx = "1.5.1"
-pymorphy2 = "0.9.1"
-pymorphy2-dicts-ru = "2.4.417127.4579844"
+pymorphy3 = "2.0.6"
+pymorphy3-dicts-ru = "2.4.417150.4580142"
 torch = "2.0.1"
 tqdm = "4.64.1"
 geopy = "2.3.0"
 shapely = "2.0.1"
 transformers = "4.28.1"
+huggingface-hub = "0.16.4"
 bertopic = "0.15.0"
 hdbscan = "0.8.33"
 umap-learn = "0.5.3"
@@ -59,7 +64,7 @@ autodocsumm = "0.2.11"
 soika-uds = "soika_uds.cli:main"
 
 [build-system]
-requires = ["poetry-core>=1.8.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
@@ -67,7 +72,7 @@ testpaths = ["tests/unit"]
 addopts = "-ra"
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]
