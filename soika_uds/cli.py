@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from collections.abc import Sequence
+from dataclasses import asdict
 from pathlib import Path
 
 from .diagnostics import diagnostics_payload
@@ -105,7 +106,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             _print(lock_manifest(args.manifest, args.output))
             return 0
         if args.models_command == "install":
-            _print([item.__dict__ for item in install_models(args.manifest, args.destination)])
+            _print(
+                [
+                    asdict(item)
+                    for item in install_models(args.manifest, args.destination)
+                ]
+            )
             return 0
         if args.models_command == "verify":
             payload = verify_models(args.destination)
