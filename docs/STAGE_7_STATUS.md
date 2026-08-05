@@ -44,12 +44,14 @@
 
 Подробное описание: `docs/PREPROCESSING.md`.
 
-## Проверка
+## Финальная проверка
 
 - Python 3.11 compilation — success;
 - Ruff — success;
 - 126 deterministic unit, contract, orchestration, parser-platform, connector и preprocessing tests — success;
-- `poetry.lock` consistency — success на проверенном кодовом commit;
-- CPU/GPU Docker-контур проверяется финальным CI после документальных изменений.
+- `poetry.lock` consistency — success;
+- CPU Docker build и запуск — success;
+- `/healthz` и `/readyz` — success;
+- GPU Docker target build — success.
 
-Финальная фиксация CI выполняется на итоговом diff перед объединением PR.
+Финальный CI выполнен на итоговом diff PR этапа 7 перед объединением с `main`.
