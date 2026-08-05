@@ -20,6 +20,7 @@
 - запрет неструктурированных результатов и `DataFrame` между подсистемами;
 - материализация `AnalysisResultV1`;
 - CLI для list, status, cancel и retry;
-- unit-, recovery-, failure-injection- и CLI-тесты.
+- unit-, recovery-, failure-injection- и CLI-тесты;
+- исходный код нормализован по постоянным правилам Ruff проекта.
 
 Критерий завершения: после аварийного завершения worker новый worker продолжает выполнение с последнего подтверждённого checkpoint, не повторяя завершённые стадии.
