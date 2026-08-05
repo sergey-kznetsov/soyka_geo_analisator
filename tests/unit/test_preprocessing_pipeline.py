@@ -100,7 +100,7 @@ def test_near_duplicates_are_detected_inside_repeat_window() -> None:
             message("first", "У дома десять снова не работает уличный фонарь"),
             message(
                 "second",
-                "У дома 10 снова не работает фонарь уличного освещения",
+                "Снова не работает уличный фонарь у дома 10",
                 minute=5,
             ),
         ]
