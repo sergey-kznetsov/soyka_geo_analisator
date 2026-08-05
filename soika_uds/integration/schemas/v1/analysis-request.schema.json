@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soika-uds.dev/1.0.0/analysis-request.schema.json",
+  "title": "SOIKA UDS Development analysis request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "message_type",
+    "analysis_id",
+    "requested_at",
+    "territory",
+    "sources",
+    "options",
+    "allow_partial",
+    "idempotency_key"
+  ],
+  "properties": {
+    "contract_version": {
+      "$ref": "common.schema.json#/$defs/contractVersion"
+    },
+    "message_type": {
+      "const": "analysis.request"
+    },
+    "analysis_id": {
+      "$ref": "common.schema.json#/$defs/analysisId"
+    },
+    "requested_at": {
+      "$ref": "common.schema.json#/$defs/awareDateTime"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]{15,199}$"
+    },
+    "territory": {
+      "$ref": "common.schema.json#/$defs/territory"
+    },
+    "period": {
+      "$ref": "common.schema.json#/$defs/period"
+    },
+    "sources": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "options": {
+      "type": "object"
+    },
+    "allow_partial": {
+      "type": "boolean"
+    }
+  }
+}
