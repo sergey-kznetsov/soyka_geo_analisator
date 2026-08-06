@@ -87,7 +87,10 @@ class GeolocationStageHandler:
                 }
             )
         try:
-            result = self.engine.geolocate(tuple(engine_messages))
+            result = self.engine.geolocate(
+                tuple(engine_messages),
+                city=context.request.territory.city,
+            )
         except GeolocationProviderError as error:
             error_type = (
                 RetryableStageError if error.retryable else PermanentStageError
