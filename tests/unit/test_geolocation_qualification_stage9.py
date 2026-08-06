@@ -43,6 +43,13 @@ def _passing_metrics(*, model_smoke_passed: bool = True) -> dict:
         "median_distance_m": 20.0,
         "p95_distance_m": 90.0,
         "cities": cities,
+        "runtime_config": {
+            "min_confidence": 0.25,
+            "max_candidates": 5,
+            "country_codes": ["ru"],
+            "language": "ru",
+            "ranking": "semantic-v1",
+        },
         "runtime_provenance": {"provider": {"type": "nominatim"}},
         "extraction_exact_rate": 1.0,
         "low_confidence_rate": 0.0,
@@ -89,6 +96,7 @@ def test_qualification_derives_registry_only_from_passed_gates(tmp_path: Path) -
     assert report.approved_for_production is True
     assert all(gate.state is GateState.PASSED for gate in report.gates)
     registry = report.registry_dict()
+    assert registry["runtime_config"]["ranking"] == "semantic-v1"
     registry_path = tmp_path / "registry.json"
     registry_path.write_text(json.dumps(registry), encoding="utf-8")
     loaded = load_qualified_registry(registry_path)
@@ -128,6 +136,23 @@ def test_loaded_registry_is_deeply_frozen(tmp_path: Path) -> None:
         loaded["validation"]["approved_levels"] = []
     with pytest.raises(TypeError, match="immutable"):
         loaded["provider_policy"]["https_required"] = False
+    with pytest.raises(TypeError, match="immutable"):
+        loaded["runtime_config"]["min_confidence"] = 0.0
+
+
+def test_missing_runtime_config_blocks_activation() -> None:
+    audit = load_model_audit(AUDIT_PATH)
+    validation = load_validation_manifest(VALIDATION_PATH)
+    metrics = _passing_metrics()
+    metrics.pop("runtime_config")
+    report = qualify_geolocation(
+        model_audit=audit,
+        validation=validation,
+        metrics=metrics,
+    )
+    assert report.approved_for_production is False
+    runtime_gate = next(gate for gate in report.gates if gate.code == "RUNTIME_CONFIG")
+    assert runtime_gate.state is GateState.BLOCKED
 
 
 def test_missing_model_smoke_blocks_activation() -> None:
