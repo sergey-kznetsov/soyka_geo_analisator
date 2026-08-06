@@ -120,6 +120,17 @@ class RequestsJsonTransport:
             self._session = requests.Session()
         return self._session
 
+    @staticmethod
+    def _decode_json(response: Any, url: str) -> Any:
+        try:
+            return response.json()
+        except Exception as error:
+            raise TransportError(
+                f"malformed JSON response from {url}: {type(error).__name__}",
+                retryable=False,
+                status_code=int(response.status_code),
+            ) from error
+
     def request_json(
         self,
         method: str,
@@ -154,7 +165,7 @@ class RequestsJsonTransport:
                         raise error
                     last_error = error
                 else:
-                    return response.json()
+                    return self._decode_json(response, url)
             except TransportError:
                 raise
             except Exception as error:
