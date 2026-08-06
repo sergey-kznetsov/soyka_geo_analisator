@@ -40,8 +40,14 @@ def _migrate_legacy_checkpoints(payload: Mapping[str, Any]) -> dict[str, Any]:
     raw_checkpoints = migrated.get("checkpoints")
     if not isinstance(raw_checkpoints, list):
         return migrated
-    checkpoints = [dict(item) if isinstance(item, Mapping) else item for item in raw_checkpoints]
-    stages = [item.get("stage") if isinstance(item, Mapping) else None for item in checkpoints]
+    checkpoints = [
+        dict(item) if isinstance(item, Mapping) else item
+        for item in raw_checkpoints
+    ]
+    stages = [
+        item.get("stage") if isinstance(item, Mapping) else None
+        for item in checkpoints
+    ]
     if PipelineStage.FILTERING.value in stages:
         return migrated
     legacy_stages = [
