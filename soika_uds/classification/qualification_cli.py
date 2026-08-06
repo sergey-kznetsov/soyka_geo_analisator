@@ -7,7 +7,8 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from .qualification import load_qualification_input, qualify_release
+from .qualification import qualify_release
+from .qualification_loader import load_qualification_input
 
 
 def build_parser() -> argparse.ArgumentParser:
