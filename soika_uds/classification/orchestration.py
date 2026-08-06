@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
 
 from ..integration import ContractIssue
-from ..orchestration import PermanentStageError, PipelineStage, StageContext, StageResult
+from ..orchestration import (
+    PermanentStageError,
+    PipelineStage,
+    StageContext,
+    StageResult,
+)
 from .runtime import ClassificationEngine
 
 
