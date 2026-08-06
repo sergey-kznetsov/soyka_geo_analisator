@@ -13,16 +13,18 @@ ArtifactVerifier = Callable[[ModelDescriptor], None]
 
 
 class TransformersPredictionBackend:
-    """Load commit-pinned models lazily and perform deterministic batch inference."""
+    """Load verified commit-pinned models and perform batch inference."""
 
     def __init__(
         self,
         *,
+        artifact_verifier: ArtifactVerifier,
         pipeline_factory: PipelineFactory | None = None,
         tokenizer_factory: TokenizerFactory | None = None,
-        artifact_verifier: ArtifactVerifier | None = None,
         local_files_only: bool = True,
     ) -> None:
+        if not callable(artifact_verifier):
+            raise TypeError("artifact_verifier must be callable")
         if pipeline_factory is None or tokenizer_factory is None:
             from transformers import AutoTokenizer, pipeline
 
@@ -48,8 +50,7 @@ class TransformersPredictionBackend:
         cached = self._pipelines.get(key)
         if cached is not None:
             return cached
-        if self._artifact_verifier is not None:
-            self._artifact_verifier(model)
+        self._artifact_verifier(model)
         tokenizer = self._tokenizer_factory(
             model.tokenizer_id,
             revision=model.tokenizer_revision,
