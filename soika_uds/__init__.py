@@ -26,6 +26,20 @@ from .contracts import (
     TerritoryContext,
 )
 from .engine import SoikaEngine
+from .geolocation import ALGORITHM_VERSION as GEOLOCATION_ALGORITHM_VERSION
+from .geolocation import (
+    AddressMention,
+    GeocodingCandidate,
+    GeolocationConfig,
+    GeolocationEngine,
+    GeolocationStageHandler,
+    GeoPoint,
+    LocationKind,
+    MessageGeolocationResult,
+    NominatimClient,
+    OverpassClient,
+    SQLiteResponseCache,
+)
 from .integration import (
     CURRENT_CONTRACT_VERSION,
     SUPPORTED_CONTRACT_VERSIONS,
@@ -108,14 +122,16 @@ from .preprocessing import (
     source_message_to_dict,
 )
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
+    "GEOLOCATION_ALGORITHM_VERSION",
     "PIPELINE_STAGES",
     "PREPROCESSING_ALGORITHM_VERSION",
     "SUPPORTED_CONTRACT_VERSIONS",
     "AccessMethod",
+    "AddressMention",
     "AnalysisRequestV1",
     "AnalysisResult",
     "AnalysisResultV1",
@@ -144,6 +160,11 @@ __all__ = [
     "ExecutionDevice",
     "FileJobStore",
     "FileParserCheckpointStore",
+    "GeocodingCandidate",
+    "GeolocationConfig",
+    "GeolocationEngine",
+    "GeolocationStageHandler",
+    "GeoPoint",
     "IdempotencyConflictError",
     "InMemoryJobStore",
     "InvalidStageOutputError",
@@ -154,15 +175,19 @@ __all__ = [
     "JobStatusV1",
     "LabelPrediction",
     "LanguageResult",
+    "LocationKind",
     "MessageClassification",
     "MessageClassificationResult",
     "MessageDecision",
+    "MessageGeolocationResult",
     "MessageType",
     "MissingStageHandlerError",
     "ModelDescriptor",
     "ModelResult",
+    "NominatimClient",
     "OrchestrationError",
     "OrchestrationStoreError",
+    "OverpassClient",
     "ParserAdapter",
     "ParserPage",
     "ParserRegistry",
@@ -183,6 +208,7 @@ __all__ = [
     "ResultProvenance",
     "RetryPolicy",
     "RetryableStageError",
+    "SQLiteResponseCache",
     "SafeHttpTransport",
     "SoikaEngine",
     "SoikaOrchestrator",
