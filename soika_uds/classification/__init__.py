@@ -1,6 +1,12 @@
 """Production classification and topic-refinement public API."""
 
 from .backend import TransformersPredictionBackend
+from .evaluation import (
+    ValidationLabel,
+    evaluate_predictions,
+    label_distribution,
+    total_variation_drift,
+)
 from .models import (
     ClassificationBatchResult,
     ClassificationConfig,
@@ -29,5 +35,9 @@ __all__ = [
     "ModelDescriptor",
     "PredictionBackend",
     "TransformersPredictionBackend",
+    "ValidationLabel",
+    "evaluate_predictions",
+    "label_distribution",
     "load_classification_registry",
+    "total_variation_drift",
 ]
