@@ -33,6 +33,7 @@ jobs:
           pytest==7.4.4
           ruff==0.6.9
           pyproj==3.7.2
+          shapely==2.0.1
           pymorphy3==2.0.6
           pymorphy3-dicts-ru==2.4.417150.4580142
 
