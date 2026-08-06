@@ -29,10 +29,16 @@ Validation set `soika-geolocation-ru-target-cities` версии `1.0.0` сод�
 - within-tolerance rate: 0,875;
 - kind accuracy: 0,958333;
 - low-confidence rate: 0;
-- median distance: 119,755958 м;
-- p95 distance: 1 352,342874 м.
+- median distance: 119,782 м;
+- p95 distance: 1 352,251 м.
 
 Все обязательные gates прошли: model audit, model smoke, validation manifest, sample size, extraction, confidence, resolution, distance, kind, per-city quality, pinned runtime config и provider policy.
+
+Report digest: `0d68d8c102da8548703b0468e64f429cd9c9a8d0a210aa40674a55c441bbfd73`.
+
+Registry digest: `6f3be8ddd720bce2b29183a44640dacccac24fd3a9146ec7c3c2c9605b586da9`.
+
+Prediction digest: `141228c900845bc300ebfff79705cc06caf2adb83aeec05ccd5b0f39348d6bf2`.
 
 ## Production scope
 
@@ -47,6 +53,8 @@ Production registry фиксирует `semantic-v1`, `min_confidence=0.25`, `ma
 ## Проверки
 
 Контур покрыт unit-тестами контрактов, semantic ranking, model bridge, deep immutability, tamper protection, production scope и provider policy. CI проверяет Python compilation, Ruff, полный unit suite, `poetry.lock`, CPU Docker, health/readiness и GPU target build. Отдельный workflow повторно выполняет live qualification и сохраняет predictions, report и registry.
+
+Qualification evidence зафиксировано в `evidence/geolocation/v1`.
 
 ## Критерий завершения
 
