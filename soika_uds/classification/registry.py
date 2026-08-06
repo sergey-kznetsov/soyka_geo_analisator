@@ -15,6 +15,51 @@ from .models import (
 )
 
 _REQUIRED_ROLES = {"category", "topic"}
+_MODEL_GATE_SUFFIXES = {
+    "present",
+    "repository",
+    "revision",
+    "license",
+    "training_data",
+    "intended_use",
+    "weights_format",
+    "weights_digest",
+    "tokenizer_revision",
+    "label_space",
+    "evidence",
+}
+_CORE_GATE_CODES = {
+    *(f"model.{role}.{suffix}" for role in _REQUIRED_ROLES for suffix in _MODEL_GATE_SUFFIXES),
+    "taxonomy.hierarchy",
+    "validation.present",
+    "validation.approved",
+    "validation.samples",
+    "validation.category_label_space",
+    "validation.topic_label_space",
+    "validation.category_coverage",
+    "validation.topic_coverage",
+    "validation.annotation_depth",
+    "validation.agreement",
+    "benchmark.cpu.present",
+    "benchmark.cpu.completed",
+    "benchmark.cpu.repeats",
+    "benchmark.cpu.validation",
+    "benchmark.cpu.model_registry",
+    "quality.present",
+    "quality.samples",
+    "quality.validation_digest",
+    "quality.model_registry",
+    "quality.category_macro_f1",
+    "quality.category_macro_recall",
+    "quality.topic_macro_f1",
+    "quality.topic_macro_recall",
+    "quality.low_confidence_rate",
+    "quality.category_calibration",
+    "quality.topic_calibration",
+    "quality.calibration_evidence",
+    "quality.drift",
+    "quality.baseline",
+}
 
 
 def _sha256(value: object, field_name: str) -> str:
@@ -207,6 +252,43 @@ def _load_object(path: Path, field_name: str) -> Mapping[str, Any]:
     return payload
 
 
+def _validated_gate_states(raw_gates: object) -> tuple[set[str], list[str]]:
+    if not isinstance(raw_gates, list) or not raw_gates:
+        raise ValueError("qualification report must contain gates")
+    codes: set[str] = set()
+    blockers: list[str] = []
+    for raw_gate in raw_gates:
+        if not isinstance(raw_gate, Mapping):
+            raise ValueError("qualification report gates must be objects")
+        if set(raw_gate) != {"code", "state", "detail", "evidence"}:
+            raise ValueError("qualification report gate fields do not match schema")
+        code = raw_gate["code"]
+        state = raw_gate["state"]
+        detail = raw_gate["detail"]
+        evidence = raw_gate["evidence"]
+        if not isinstance(code, str) or not code:
+            raise ValueError("qualification gate code must be non-empty")
+        if code in codes:
+            raise ValueError(f"qualification report contains duplicate gate: {code}")
+        if state not in {"passed", "blocked"}:
+            raise ValueError(f"qualification gate has invalid state: {code}")
+        if not isinstance(detail, str) or not detail:
+            raise ValueError(f"qualification gate detail must be non-empty: {code}")
+        if not isinstance(evidence, list) or any(
+            not isinstance(item, str) or not item for item in evidence
+        ):
+            raise ValueError(f"qualification gate evidence is invalid: {code}")
+        codes.add(code)
+        if state == "blocked":
+            blockers.append(code)
+    missing = sorted(_CORE_GATE_CODES - codes)
+    if missing:
+        raise ValueError(
+            "qualification report is missing required gates: " + ", ".join(missing)
+        )
+    return codes, blockers
+
+
 def _verified_qualification_report(path: Path) -> Mapping[str, Any]:
     payload = _load_object(path, "qualification report")
     required = {
@@ -220,18 +302,14 @@ def _verified_qualification_report(path: Path) -> Mapping[str, Any]:
     }
     if set(payload) != required:
         raise ValueError("qualification report fields do not match schema")
-    if payload["approved_for_production"] is not True:
+    _, derived_blockers = _validated_gate_states(payload["gates"])
+    derived_approval = not derived_blockers
+    if payload["blockers"] != derived_blockers:
+        raise ValueError("qualification report blockers do not match gate states")
+    if payload["approved_for_production"] is not derived_approval:
+        raise ValueError("qualification approval does not match gate states")
+    if not derived_approval:
         raise ValueError("qualification report is not approved for production")
-    if payload["blockers"] != []:
-        raise ValueError("approved qualification report must not contain blockers")
-    gates = payload["gates"]
-    if not isinstance(gates, list) or not gates:
-        raise ValueError("approved qualification report must contain gates")
-    if any(
-        not isinstance(gate, Mapping) or gate.get("state") != "passed"
-        for gate in gates
-    ):
-        raise ValueError("approved qualification report contains a blocked gate")
     report_digest = _sha256(payload["report_digest"], "report_digest")
     canonical = {
         key: payload[key]
@@ -248,6 +326,22 @@ def _verified_qualification_report(path: Path) -> Mapping[str, Any]:
     return payload
 
 
+def _validate_embedded_qualification(
+    raw: object,
+    report: Mapping[str, Any],
+) -> None:
+    if raw is None:
+        return
+    if not isinstance(raw, Mapping):
+        raise ValueError("classification registry qualification must be an object")
+    if set(raw) != {"report_digest", "model_registry_digest"}:
+        raise ValueError("classification registry qualification fields do not match schema")
+    if raw["report_digest"] != report["report_digest"]:
+        raise ValueError("classification registry qualification report digest differs")
+    if raw["model_registry_digest"] != report["model_registry_digest"]:
+        raise ValueError("classification registry qualification model digest differs")
+
+
 def load_classification_registry(
     path: Path,
     qualification_report_path: Path,
@@ -255,7 +349,7 @@ def load_classification_registry(
     payload = _load_object(path, "classification registry")
     if payload.get("schema_version") != 2:
         raise ValueError("unsupported classification registry schema")
-    allowed = {"schema_version", "models", "topic_hierarchy"}
+    allowed = {"schema_version", "qualification", "models", "topic_hierarchy"}
     unknown = sorted(set(payload) - allowed)
     if unknown:
         raise ValueError(
@@ -273,6 +367,7 @@ def load_classification_registry(
             raise ValueError("classification registry entries must be objects")
         models[role] = _descriptor(raw)
     report = _verified_qualification_report(qualification_report_path)
+    _validate_embedded_qualification(payload.get("qualification"), report)
     return ClassificationRegistry(
         models,
         topic_hierarchy=raw_hierarchy,
