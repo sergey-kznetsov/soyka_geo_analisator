@@ -56,7 +56,7 @@ class GeolocationProfileQualificationReport(GeolocationQualificationReport):
     """Qualification report whose registry activates the tested runtime config."""
 
     def registry_dict(self) -> dict[str, Any]:
-        payload = super().registry_dict()
+        payload = GeolocationQualificationReport.registry_dict(self)
         payload.pop("registry_digest", None)
         payload["runtime_config"] = dict(self.metrics["runtime_config"])
         payload["registry_digest"] = digest_json(payload)
