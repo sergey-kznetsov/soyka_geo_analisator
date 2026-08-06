@@ -43,6 +43,7 @@ def _passing_metrics(*, model_smoke_passed: bool = True) -> dict:
         "median_distance_m": 20.0,
         "p95_distance_m": 90.0,
         "cities": cities,
+        "runtime_provenance": {"provider": {"type": "nominatim"}},
         "extraction_exact_rate": 1.0,
         "low_confidence_rate": 0.0,
         "model_smoke_passed": model_smoke_passed,
@@ -93,6 +94,40 @@ def test_qualification_derives_registry_only_from_passed_gates(tmp_path: Path) -
     loaded = load_qualified_registry(registry_path)
     assert loaded["registry_digest"] == registry["registry_digest"]
     assert loaded["validation"]["digest"] == validation.digest
+
+
+def test_report_metrics_are_deeply_copied_and_frozen() -> None:
+    audit = load_model_audit(AUDIT_PATH)
+    validation = load_validation_manifest(VALIDATION_PATH)
+    metrics = _passing_metrics()
+    report = qualify_geolocation(
+        model_audit=audit,
+        validation=validation,
+        metrics=metrics,
+    )
+    metrics["cities"]["Москва"]["resolution_rate"] = 0.0
+    assert report.metrics["cities"]["Москва"]["resolution_rate"] == 1.0
+    with pytest.raises(TypeError, match="immutable"):
+        report.metrics["cities"]["Москва"]["resolution_rate"] = 0.0
+    with pytest.raises(TypeError, match="immutable"):
+        report.metrics["runtime_provenance"]["provider"]["type"] = "changed"
+
+
+def test_loaded_registry_is_deeply_frozen(tmp_path: Path) -> None:
+    audit = load_model_audit(AUDIT_PATH)
+    validation = load_validation_manifest(VALIDATION_PATH)
+    report = qualify_geolocation(
+        model_audit=audit,
+        validation=validation,
+        metrics=_passing_metrics(),
+    )
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(report.registry_dict()), encoding="utf-8")
+    loaded = load_qualified_registry(path)
+    with pytest.raises(TypeError, match="immutable"):
+        loaded["validation"]["approved_levels"] = []
+    with pytest.raises(TypeError, match="immutable"):
+        loaded["provider_policy"]["https_required"] = False
 
 
 def test_missing_model_smoke_blocks_activation() -> None:
