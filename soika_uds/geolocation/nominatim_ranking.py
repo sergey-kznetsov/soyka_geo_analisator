@@ -101,7 +101,11 @@ def semantic_kind(
     """Return the SOIKA semantic level, not merely the OSM feature type."""
 
     if mention.kind is LocationKind.HOUSE:
-        return LocationKind.HOUSE if _house_match(mention, payload, label) else LocationKind.STREET
+        return (
+            LocationKind.HOUSE
+            if _house_match(mention, payload, label)
+            else LocationKind.STREET
+        )
     if mention.kind in {LocationKind.POI, LocationKind.LANDMARK}:
         semantic_name = _semantic_name(payload, label)
         if _name_similarity(mention, semantic_name) >= 0.5:
