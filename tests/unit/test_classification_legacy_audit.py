@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soika_uds.classification.qualification import (
-    load_qualification_input,
-    qualify_release,
-)
+from soika_uds.classification.qualification import qualify_release
+from soika_uds.classification.qualification_loader import load_qualification_input
 
 
 def repository_root() -> Path:
