@@ -1,6 +1,12 @@
 """Production classification and topic-refinement public API."""
 
 from .backend import TransformersPredictionBackend
+from .calibration import (
+    IdentityCalibrator,
+    PiecewiseLinearCalibrator,
+    ScoreCalibrator,
+    calibrate_scores,
+)
 from .evaluation import (
     ValidationLabel,
     evaluate_predictions,
@@ -30,12 +36,16 @@ __all__ = [
     "ClassificationStats",
     "ConfidenceBand",
     "ExecutionDevice",
+    "IdentityCalibrator",
     "LabelPrediction",
     "MessageClassificationResult",
     "ModelDescriptor",
+    "PiecewiseLinearCalibrator",
     "PredictionBackend",
+    "ScoreCalibrator",
     "TransformersPredictionBackend",
     "ValidationLabel",
+    "calibrate_scores",
     "evaluate_predictions",
     "label_distribution",
     "load_classification_registry",
