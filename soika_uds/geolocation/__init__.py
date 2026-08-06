@@ -1,7 +1,12 @@
 """Production geolocation and OSM contour."""
 
 from .cache import SQLiteResponseCache
-from .crs import haversine_distance_m, metric_crs_for, metric_distance_m, project_point
+from .crs import (
+    haversine_distance_m,
+    metric_crs_for,
+    metric_distance_m,
+    project_point,
+)
 from .evaluation import GeolocationValidationCase, evaluate_geolocation
 from .extraction import (
     CompositeMentionExtractor,
@@ -28,7 +33,13 @@ from .normalization import AddressNormalizer, clean_text, is_missing
 from .orchestration import GeolocationStageHandler
 from .providers import CandidateProvider, NominatimClient, OverpassClient
 from .runtime import GeolocationEngine, GeolocationProviderError
-from .transport import HttpRetryPolicy, JsonTransport, RateLimiter, RequestsJsonTransport, TransportError
+from .transport import (
+    HttpRetryPolicy,
+    JsonTransport,
+    RateLimiter,
+    RequestsJsonTransport,
+    TransportError,
+)
 
 __all__ = [
     "ALGORITHM_VERSION",
