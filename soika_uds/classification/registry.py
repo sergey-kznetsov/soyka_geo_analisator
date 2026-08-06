@@ -18,11 +18,20 @@ class ClassificationRegistry:
         missing = sorted(required - set(normalized))
         unknown = sorted(set(normalized) - required)
         if missing:
-            raise ValueError(f"classification registry is missing: {', '.join(missing)}")
+            missing_names = ", ".join(missing)
+            raise ValueError(f"classification registry is missing: {missing_names}")
         if unknown:
-            raise ValueError(f"classification registry has unknown roles: {', '.join(unknown)}")
-        if not all(model.approved_for_production for model in normalized.values()):
-            raise ValueError("all classification models must be approved for production")
+            unknown_names = ", ".join(unknown)
+            raise ValueError(
+                f"classification registry has unknown roles: {unknown_names}"
+            )
+        approved = all(
+            model.approved_for_production for model in normalized.values()
+        )
+        if not approved:
+            raise ValueError(
+                "all classification models must be approved for production"
+            )
         object.__setattr__(self, "_models", MappingProxyType(normalized))
 
     def get(self, role: str) -> ModelDescriptor:
