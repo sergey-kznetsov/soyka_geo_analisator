@@ -9,11 +9,16 @@ def test_postgis_plan_uses_index_aware_predicates() -> None:
     indexes = spatial_index_plan()
     assert len(indexes) == 2
     assert all("USING GIST" in item.sql for item in indexes)
-    assert "WHERE geom IS NOT NULL AND has_exact_geometry" in indexes[1].sql
+    assert "USING GIST (geom)" in indexes[0].sql
+    assert "USING GIST ((geom::geography))" in indexes[1].sql
+    assert all(
+        "WHERE geom IS NOT NULL AND has_exact_geometry" in item.sql
+        for item in indexes
+    )
 
     queries = spatial_query_plan()
     assert "ST_DWithin" in queries.radius_predicate
-    assert "::geography" in queries.radius_predicate
+    assert "geom::geography" in queries.radius_predicate
     assert "ST_Covers" in queries.polygon_predicate
     assert queries.required_srid == 4326
 
