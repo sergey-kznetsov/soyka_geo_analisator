@@ -108,7 +108,7 @@ from .preprocessing import (
     source_message_to_dict,
 )
 
-__version__ = "0.11.0"
+__version__ = "0.12.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
