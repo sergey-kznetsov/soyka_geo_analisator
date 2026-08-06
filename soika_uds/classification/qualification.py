@@ -6,7 +6,7 @@ import json
 import math
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
@@ -846,7 +846,10 @@ def qualify_release(inputs: QualificationInput) -> QualificationReport:
         )
     )
     if quality is not None:
-        sample_match = validation is not None and quality.samples == validation.sample_count
+        sample_match = (
+            validation is not None
+            and quality.samples == validation.sample_count
+        )
         gates.extend(
             [
                 _gate(

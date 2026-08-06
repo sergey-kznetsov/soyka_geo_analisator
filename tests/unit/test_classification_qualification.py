@@ -84,7 +84,11 @@ def validation(*, approved: bool = True) -> ValidationSetEvidence:
     )
 
 
-def benchmark(device: ExecutionDevice, *, output_digest: str = SHA) -> BenchmarkEvidence:
+def benchmark(
+    device: ExecutionDevice,
+    *,
+    output_digest: str = SHA,
+) -> BenchmarkEvidence:
     return BenchmarkEvidence(
         device=device,
         completed=True,
