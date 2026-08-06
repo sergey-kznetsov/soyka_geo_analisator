@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from pyproj import Geod
+
 from ..contracts import TerritoryContext
-from ..geolocation.crs import metric_distance_m
 from ..geolocation.models import GeoPoint, LocationKind
 from .geometry import SpatialTarget, build_spatial_target, project_geo_point
 from .models import (
@@ -20,6 +22,8 @@ from .models import (
     TerritoryMode,
     digest_json,
 )
+
+_WGS84_GEOD = Geod(ellps="WGS84")
 
 
 def _mapping(value: object, field_name: str) -> Mapping[str, Any]:
@@ -53,6 +57,19 @@ def _point_from_candidate(candidate: Mapping[str, Any]) -> GeoPoint:
     if len(coordinates) < 2:
         raise ValueError("Point coordinates must contain longitude and latitude")
     return GeoPoint(coordinates[0], coordinates[1])
+
+
+def _geodesic_distance_m(first: GeoPoint, second: GeoPoint) -> float:
+    _forward, _back, distance = _WGS84_GEOD.inv(
+        first.longitude,
+        first.latitude,
+        second.longitude,
+        second.latitude,
+    )
+    result = abs(float(distance))
+    if not math.isfinite(result):
+        raise ValueError("geodesic distance is not finite")
+    return result
 
 
 def _base_result(
@@ -89,7 +106,7 @@ class SpatialFilterEngine:
     ) -> tuple[bool, SpatialRelation, float, str]:
         if target.center is None or target.radius_meters is None:
             raise ValueError("radius target requires center and radius")
-        distance = metric_distance_m(target.center, point)
+        distance = _geodesic_distance_m(target.center, point)
         delta = abs(distance - target.radius_meters)
         if delta <= self.config.boundary_epsilon_m:
             return True, SpatialRelation.BOUNDARY, distance, "radius_boundary_included"
@@ -157,6 +174,7 @@ class SpatialFilterEngine:
             "metric_crs": target.metric_crs,
             "target_digest": target.digest,
             "candidate_id": candidate.get("candidate_id"),
+            "radius_distance_method": "WGS84-geodesic",
         }
         if target.mode is TerritoryMode.UNDEFINED:
             return _base_result(
