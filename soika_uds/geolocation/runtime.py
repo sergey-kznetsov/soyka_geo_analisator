@@ -63,12 +63,17 @@ class GeolocationEngine:
             return True
         return message.get("included_for_analysis", True) is True
 
-    def _search(self, mention) -> tuple[GeocodingCandidate, ...]:
+    def _search(
+        self,
+        mention,
+        *,
+        city: str | None,
+    ) -> tuple[GeocodingCandidate, ...]:
         try:
             primary = tuple(
                 self._provider.search(
                     mention,
-                    city=self._config.default_city,
+                    city=city,
                     country_codes=self._config.country_codes,
                     language=self._config.language,
                     limit=self._config.max_candidates,
@@ -111,9 +116,21 @@ class GeolocationEngine:
     def geolocate(
         self,
         messages: Sequence[Mapping[str, Any]],
+        *,
+        city: str | None = None,
     ) -> GeolocationBatchResult:
+        effective_city = city.strip() if isinstance(city, str) and city.strip() else None
+        effective_city = effective_city or self._config.default_city
+        effective_config = {
+            **self._config.to_dict(),
+            "effective_city": effective_city,
+        }
+        effective_config_digest = digest_json(effective_config)
         normalized_messages = tuple(sorted(messages, key=self._message_key))
-        input_payload = [dict(message) for message in normalized_messages]
+        input_payload = {
+            "city": effective_city,
+            "messages": [dict(message) for message in normalized_messages],
+        }
         input_digest = digest_json(input_payload)
         results: list[MessageGeolocationResult] = []
         skipped = 0
@@ -127,7 +144,8 @@ class GeolocationEngine:
             "overpass": (
                 dict(self._overpass.identity) if self._overpass else None
             ),
-            "config_digest": self._config.digest,
+            "effective_city": effective_city,
+            "config_digest": effective_config_digest,
         }
         for message in normalized_messages:
             key = self._message_key(message)
@@ -155,7 +173,7 @@ class GeolocationEngine:
                     )
                 )
                 continue
-            candidates = self._search(mention)
+            candidates = self._search(mention, city=effective_city)
             if not candidates:
                 unresolved += 1
                 results.append(
@@ -212,7 +230,7 @@ class GeolocationEngine:
             "results": [result.to_dict() for result in results],
             "stats": stats.to_dict(),
             "input_digest": input_digest,
-            "config_digest": self._config.digest,
+            "config_digest": effective_config_digest,
         }
         output_digest = digest_json(output_core)
         return GeolocationBatchResult(
@@ -220,5 +238,5 @@ class GeolocationEngine:
             stats=stats,
             input_digest=input_digest,
             output_digest=output_digest,
-            config_digest=self._config.digest,
+            config_digest=effective_config_digest,
         )
