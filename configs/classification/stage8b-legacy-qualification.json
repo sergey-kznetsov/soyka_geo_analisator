@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "role": "category",
+      "repo_id": "Sandrro/text_to_function_v2",
+      "repository_exists": true,
+      "requested_revision": "main",
+      "resolved_revision": null,
+      "license_id": "MIT",
+      "license_reviewed": true,
+      "training_data_documented": false,
+      "training_data_reviewed": false,
+      "intended_use_documented": false,
+      "weights_format": null,
+      "weights_sha256": null,
+      "tokenizer_id": "cointegrated/rubert-tiny2",
+      "tokenizer_revision": "e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae",
+      "evidence_urls": [
+        "https://huggingface.co/Sandrro/text_to_function_v2",
+        "https://huggingface.co/cointegrated/rubert-tiny2/commits/e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae"
+      ],
+      "notes": [
+        "The repository and MIT metadata were confirmed on the official model page.",
+        "The model card does not document the training or evaluation dataset sufficiently for production review.",
+        "The mutable main reference must not be used for production until an immutable model commit and weights digest are recorded."
+      ]
+    },
+    {
+      "role": "topic",
+      "repo_id": "Sandrro/text_to_subfunction_v10",
+      "repository_exists": false,
+      "requested_revision": "main",
+      "resolved_revision": null,
+      "license_id": null,
+      "license_reviewed": false,
+      "training_data_documented": false,
+      "training_data_reviewed": false,
+      "intended_use_documented": false,
+      "weights_format": null,
+      "weights_sha256": null,
+      "tokenizer_id": "cointegrated/rubert-tiny2",
+      "tokenizer_revision": "e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae",
+      "evidence_urls": [
+        "https://huggingface.co/Sandrro",
+        "https://huggingface.co/cointegrated/rubert-tiny2/commits/e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae"
+      ],
+      "notes": [
+        "The requested v10 repository was not present in the author's public model list during the 2026-08-06 review.",
+        "The public list contained text_to_subfunction_v7 and text_to_topic; neither is substituted automatically for v10.",
+        "License, training data, immutable revision, weights format and weights digest remain unconfirmed."
+      ]
+    }
+  ],
+  "validation": null,
+  "benchmarks": [],
+  "quality": null,
+  "policy": {
+    "min_validation_samples": 500,
+    "min_samples_per_category": 30,
+    "min_samples_per_topic": 20,
+    "min_annotations_per_item": 2,
+    "min_annotation_agreement": 0.8,
+    "min_category_macro_f1": 0.75,
+    "min_category_macro_recall": 0.7,
+    "min_topic_macro_f1": 0.65,
+    "min_topic_macro_recall": 0.6,
+    "max_low_confidence_rate": 0.25,
+    "max_expected_calibration_error": 0.1,
+    "max_drift_tvd": 0.2,
+    "min_benchmark_repeats": 3,
+    "require_gpu": true,
+    "allowed_weight_formats": [
+      "safetensors"
+    ]
+  }
+}

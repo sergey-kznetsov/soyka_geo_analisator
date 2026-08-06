@@ -24,10 +24,27 @@ from .models import (
     ModelDescriptor,
 )
 from .orchestration import ClassificationStageHandler
+from .qualification import (
+    BenchmarkEvidence,
+    GateResult,
+    GateState,
+    ModelAuditRecord,
+    QualificationInput,
+    QualificationPolicy,
+    QualificationReport,
+    QualityEvidence,
+    ValidationSetEvidence,
+    qualify_release,
+)
+from .qualification_loader import (
+    load_qualification_input,
+    qualification_input_from_dict,
+)
 from .registry import ClassificationRegistry, load_classification_registry
 from .runtime import ClassificationEngine, PredictionBackend
 
 __all__ = [
+    "BenchmarkEvidence",
     "ClassificationBatchResult",
     "ClassificationConfig",
     "ClassificationEngine",
@@ -36,18 +53,29 @@ __all__ = [
     "ClassificationStats",
     "ConfidenceBand",
     "ExecutionDevice",
+    "GateResult",
+    "GateState",
     "IdentityCalibrator",
     "LabelPrediction",
     "MessageClassificationResult",
+    "ModelAuditRecord",
     "ModelDescriptor",
     "PiecewiseLinearCalibrator",
     "PredictionBackend",
+    "QualificationInput",
+    "QualificationPolicy",
+    "QualificationReport",
+    "QualityEvidence",
     "ScoreCalibrator",
     "TransformersPredictionBackend",
     "ValidationLabel",
+    "ValidationSetEvidence",
     "calibrate_scores",
     "evaluate_predictions",
     "label_distribution",
     "load_classification_registry",
+    "load_qualification_input",
+    "qualification_input_from_dict",
+    "qualify_release",
     "total_variation_drift",
 ]
