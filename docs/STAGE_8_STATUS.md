@@ -1,71 +1,47 @@
 # Этап 8: классификация и уточнение тем
 
-Статус: этапы 8A и 8B реализованы 6 августа 2026 года. Production activation конкретных legacy-моделей остаётся заблокированной до подтверждения всех qualification gates.
+Статус: технический контур этапа 8 завершён в редакции 8C 6 августа 2026 года. Production activation конкретных моделей остаётся fail-closed до получения реального qualification report со всеми пройденными gates.
 
 Geo Analyzer 2 не изменялся.
 
-## Этап 8A: техническая production-платформа
+## 8A: production-платформа
 
-Реализовано:
+Реализованы неизменяемые контракты классификации, пакетный inference, CPU/GPU backend, независимые category/topic thresholds, калибровка, low-confidence, provenance, детерминированный output digest и handler `PipelineStage.NLP`.
 
-- отдельный пакет `soika_uds.classification`;
-- строгий fail-closed model registry;
-- обязательные immutable model/tokenizer revisions;
-- явное production approval модели;
-- неизменяемые classification contracts;
-- пакетный inference;
-- локальный Transformers backend;
-- одинаковый контракт CPU/GPU;
-- независимые category/topic thresholds;
-- low-confidence decision и причины;
-- identity и piecewise-linear confidence calibration;
-- calibration validation digest;
-- model, tokenizer, registry, config, device и calibration provenance;
-- детерминированный output digest;
-- handler `PipelineStage.NLP`;
-- label distribution и total-variation drift;
-- unit tests без сети и загрузки моделей.
+## 8B: qualification и release gates
 
-Подробности: `docs/CLASSIFICATION.md`.
+Реализованы model audit, validation-set evidence, CPU/GPU benchmark evidence, quality/calibration/drift metrics, строгий JSON loader, qualification CLI и машиночитаемый legacy audit.
 
-## Этап 8B: qualification и release gates
+## 8C: финальное усиление
 
-Реализовано:
+Закрыты дефекты воспроизводимости и ложного production approval:
 
-- строгие model audit records для category/topic roles;
-- обязательная проверка репозитория, immutable revision и SHA-256 весов;
-- license, training-data и intended-use gates;
-- allowlist безопасных форматов весов;
-- validation-set manifest;
-- контроль размера, category/topic coverage, annotation depth и agreement;
-- CPU/GPU benchmark evidence;
-- контроль repeat count и соответствия validation digest;
-- проверка детерминированной эквивалентности CPU/GPU output;
-- accuracy, macro-precision, macro-recall и macro-F1;
-- per-label precision, recall, F1 и support;
-- confusion matrices;
-- Expected Calibration Error;
-- Brier score;
-- calibration-bin statistics;
-- low-confidence, calibration и drift gates;
-- обязательные calibration и baseline digests;
-- детерминированные input/report digests;
-- строгий JSON loader;
-- qualification CLI;
-- машиночитаемый legacy audit;
-- тесты успешного и заблокированного release-сценария;
-- версия пакета `0.11.0`.
+- model и tokenizer revisions принимаются только как 40-символьные commit SHA;
+- роль registry обязана совпадать с `ModelDescriptor.task`;
+- cache key учитывает модель, веса, токенизатор, revisions и устройство;
+- provenance рекурсивно неизменяем;
+- общий confidence учитывает и категорию, и тему;
+- тема выбирается только внутри разрешённого набора для предсказанной категории;
+- полный category/topic label space обязателен;
+- validation set должен точно покрывать label space квалифицируемых моделей;
+- CPU/GPU benchmarks связаны с каноническим model registry digest;
+- quality report связан одновременно с model registry digest и validation digest;
+- boolean-значения отклоняются в числовых полях qualification;
+- production registry загружается только вместе с успешным qualification report;
+- содержимое qualification report проверяется по собственному digest;
+- backend по умолчанию использует `local_files_only=true` и поддерживает обязательный artifact verifier;
+- версия пакета повышена до `0.12.0`.
 
-Подробности: `docs/MODEL_QUALIFICATION.md` и `docs/STAGE_8B_STATUS.md`.
+Подробности: `docs/CLASSIFICATION.md`, `docs/MODEL_QUALIFICATION.md` и `docs/STAGE_8C_STATUS.md`.
 
-## Результат legacy qualification
+## Текущие legacy-модели
 
-Category repository `Sandrro/text_to_function_v2` существует и содержит metadata лицензии MIT. Production approval не выдан, поскольку не зафиксированы immutable revision и SHA-256 выбранных весов, а происхождение обучающих данных не раскрыто в достаточном для проверки объёме.
+`Sandrro/text_to_function_v2` и `Sandrro/text_to_subfunction_v10` не активированы. Для них отсутствует полный набор обязательных доказательств: immutable revision и digest весов, проверенное происхождение обучающих данных, утверждённый label space и taxonomy, ручной validation set, реальные CPU/GPU benchmarks, quality report, calibration evidence и drift baseline.
 
-Запрошенный topic repository `Sandrro/text_to_subfunction_v10` не подтверждён в публичном перечне моделей автора. Другие модели автора не подставляются автоматически вместо него.
+Текущий audit обязан возвращать `approved_for_production=false`. Это ожидаемый безопасный результат.
 
-Immutable revision токенизатора `cointegrated/rubert-tiny2` зафиксирована как `e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae`.
+## Критерий завершения
 
-Текущий qualification report должен возвращать `approved_for_production=false`. Дополнительно отсутствуют утверждённый ручной validation set, реальные CPU/GPU benchmarks, quality report, calibration evidence и drift baseline.
+Технический критерий этапа 8 выполнен: платформа не допускает модели, benchmark или quality evidence, не связанные с одним каноническим model registry digest.
 
-Блокировка является ожидаемым безопасным результатом. Production registry нельзя активировать до получения отчёта, в котором каждый обязательный gate имеет состояние `passed`.
+Продуктовый допуск конкретных весов считается выполненным только для отчёта, где `approved_for_production=true`, отсутствуют blockers, report digest корректен, а production registry соответствует model registry digest этого отчёта.
