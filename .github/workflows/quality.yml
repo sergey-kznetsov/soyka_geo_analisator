@@ -26,12 +26,13 @@ jobs:
           python-version: "3.11.15"
           cache: pip
 
-      - name: Install quality tools and morphology bridge dependency
+      - name: Install quality tools and focused runtime dependencies
         run: >-
           python -m pip install --upgrade
           pip
           pytest==7.4.4
           ruff==0.6.9
+          pyproj==3.7.2
           pymorphy3==2.0.6
           pymorphy3-dicts-ru==2.4.417150.4580142
 
