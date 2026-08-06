@@ -33,11 +33,13 @@ from .models import (
 )
 from .normalization import AddressNormalizer, clean_text, is_missing
 from .orchestration import GeolocationStageHandler
+from .production import QualifiedGeolocationEngine, production_geolocation_engine
 from .providers import CandidateProvider, NominatimClient, OverpassClient
 from .qualification_api import (
     GateResult,
     GateState,
     GeolocationModelAudit,
+    GeolocationProfileQualificationReport,
     GeolocationQualificationReport,
     GeolocationThresholds,
     GeolocationValidationCase as GeolocationQualificationCase,
@@ -50,6 +52,7 @@ from .qualification_api import (
     qualify_geolocation,
 )
 from .runtime import GeolocationEngine, GeolocationProviderError
+from .semantic_provider import SemanticNominatimClient
 from .transport import (
     HttpRetryPolicy,
     JsonTransport,
@@ -72,6 +75,7 @@ __all__ = [
     "GeolocationConfig",
     "GeolocationEngine",
     "GeolocationModelAudit",
+    "GeolocationProfileQualificationReport",
     "GeolocationProviderError",
     "GeolocationQualificationCase",
     "GeolocationQualificationReport",
@@ -92,10 +96,12 @@ __all__ = [
     "NatashaAddressExtractor",
     "NominatimClient",
     "OverpassClient",
+    "QualifiedGeolocationEngine",
     "RateLimiter",
     "RequestsJsonTransport",
     "RuleBasedMentionExtractor",
     "SQLiteResponseCache",
+    "SemanticNominatimClient",
     "TransportError",
     "clean_text",
     "evaluate_geolocation",
@@ -108,6 +114,7 @@ __all__ = [
     "low_confidence_rate",
     "metric_crs_for",
     "metric_distance_m",
+    "production_geolocation_engine",
     "project_point",
     "public_nominatim_client",
     "qualify_geolocation",
