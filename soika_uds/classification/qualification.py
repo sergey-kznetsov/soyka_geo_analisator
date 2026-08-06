@@ -618,7 +618,7 @@ def _gate(
         code=code,
         state=GateState.PASSED if passed else GateState.BLOCKED,
         detail=passed_detail if passed else blocked_detail,
-        evidence=tuple(evidence),
+        evidence=tuple(item for item in evidence if item),
     )
 
 
