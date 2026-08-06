@@ -1,5 +1,6 @@
 """Production geolocation and OSM contour."""
 
+from .artifacts import verify_model_artifact
 from .cache import SQLiteResponseCache
 from .crs import (
     haversine_distance_m,
@@ -15,6 +16,7 @@ from .extraction import (
     NatashaAddressExtractor,
     RuleBasedMentionExtractor,
 )
+from .factory import public_nominatim_client
 from .model_manager import LazyModelManager
 from .models import (
     ALGORITHM_VERSION,
@@ -80,4 +82,6 @@ __all__ = [
     "metric_crs_for",
     "metric_distance_m",
     "project_point",
+    "public_nominatim_client",
+    "verify_model_artifact",
 ]
