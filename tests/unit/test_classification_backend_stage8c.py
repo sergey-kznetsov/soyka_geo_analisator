@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from soika_uds.classification import ModelDescriptor, TransformersPredictionBackend
 
 MODEL_COMMIT = "a" * 40
@@ -38,6 +40,7 @@ def test_pipeline_cache_key_includes_tokenizer_identity() -> None:
         return classify
 
     backend = TransformersPredictionBackend(
+        artifact_verifier=lambda model: None,
         pipeline_factory=pipeline_factory,
         tokenizer_factory=tokenizer_factory,
     )
@@ -85,3 +88,8 @@ def test_artifact_verifier_runs_before_pipeline_creation() -> None:
     )
 
     assert verified == [WEIGHTS_SHA]
+
+
+def test_artifact_verifier_is_required() -> None:
+    with pytest.raises(TypeError, match="artifact_verifier"):
+        TransformersPredictionBackend(artifact_verifier=None)
