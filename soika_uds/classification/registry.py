@@ -224,6 +224,14 @@ def _verified_qualification_report(path: Path) -> Mapping[str, Any]:
         raise ValueError("qualification report is not approved for production")
     if payload["blockers"] != []:
         raise ValueError("approved qualification report must not contain blockers")
+    gates = payload["gates"]
+    if not isinstance(gates, list) or not gates:
+        raise ValueError("approved qualification report must contain gates")
+    if any(
+        not isinstance(gate, Mapping) or gate.get("state") != "passed"
+        for gate in gates
+    ):
+        raise ValueError("approved qualification report contains a blocked gate")
     report_digest = _sha256(payload["report_digest"], "report_digest")
     canonical = {
         key: payload[key]
