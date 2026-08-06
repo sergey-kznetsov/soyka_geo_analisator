@@ -1,0 +1,73 @@
+name: stage8b-finalize
+
+on:
+  push:
+    branches:
+      - agent/stage8b-model-qualification
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/stage8b-model-qualification
+      - name: Update version and development plan
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          for filename in ("pyproject.toml", "soika_uds/__init__.py"):
+              path = Path(filename)
+              text = path.read_text(encoding="utf-8")
+              old = '0.10.0'
+              if text.count(old) != 1:
+                  raise SystemExit(f"unexpected version count in {filename}")
+              path.write_text(text.replace(old, '0.11.0'), encoding="utf-8")
+
+          plan = Path("docs/DEVELOPMENT_PLAN.md")
+          text = plan.read_text(encoding="utf-8")
+          old = '''## 8. Классификация и уточнение тем
+
+          - закрепить модели по revision;
+          - провести аудит лицензий и обучающих данных;
+          - создать model registry;
+          - добавить batch inference;
+          - добавить калибровку confidence;
+          - определить пороги low-confidence;
+          - подготовить набор ручной валидации;
+          - измерять quality drift;
+          - обеспечить CPU/GPU режимы.
+
+          Критерий завершения: качество подтверждено на утверждённом наборе данных и воспроизводится на сервере.
+          '''
+          new = '''## 8. Классификация и уточнение тем
+
+          **Этап 8A: техническая production-платформа — выполнено 6 августа 2026 года.**
+
+          Реализованы строгий model registry, immutable revisions, batch inference, CPU/GPU backend contract, confidence thresholds, calibration, provenance и handler `PipelineStage.NLP`.
+
+          **Этап 8B: квалификация моделей и release gates — выполнено 6 августа 2026 года.**
+
+          Реализованы fail-closed model audit, validation-set evidence, CPU/GPU benchmark evidence, macro-precision/recall/F1, per-label metrics, confusion matrices, ECE, Brier score, low-confidence и drift gates, qualification CLI и машиночитаемый legacy audit. Подробности: `docs/MODEL_QUALIFICATION.md` и `docs/STAGE_8B_STATUS.md`.
+
+          Текущие legacy-модели не получили production approval: category model не имеет достаточного training-data review и зафиксированных весов, а запрошенный topic repository v10 не подтверждён. Отсутствуют утверждённый validation set, реальные CPU/GPU benchmarks, calibration curve и drift baseline. Production registry остаётся заблокированным до закрытия всех gates.
+
+          Критерий технического завершения 8B подтверждается детерминированными тестами qualification. Критерий качества конкретных весов считается выполненным только после отчёта `approved_for_production=true` на утверждённом validation set.
+          '''
+          if text.count(old) != 1:
+              raise SystemExit("unexpected stage 8 plan block")
+          plan.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+      - name: Remove temporary workflow
+        run: rm .github/workflows/stage8b-finalize.yml
+      - name: Commit finalization
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml soika_uds/__init__.py docs/DEVELOPMENT_PLAN.md .github/workflows/stage8b-finalize.yml
+          git commit -m "Finalize stage 8B metadata"
+          git push origin HEAD:agent/stage8b-model-qualification
