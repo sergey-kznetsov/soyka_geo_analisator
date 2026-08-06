@@ -2,16 +2,27 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+_MAX_IDENTIFIER_BYTES = 63
 
 
 def _identifier(value: str, field_name: str) -> str:
     if not isinstance(value, str) or _IDENTIFIER.fullmatch(value) is None:
         raise ValueError(f"{field_name} must be a safe PostgreSQL identifier")
     return value
+
+
+def _bounded_index_name(*parts: str) -> str:
+    raw = "_".join(parts)
+    if len(raw.encode("ascii")) <= _MAX_IDENTIFIER_BYTES:
+        return raw
+    suffix = hashlib.sha256(raw.encode("ascii")).hexdigest()[:10]
+    prefix_length = _MAX_IDENTIFIER_BYTES - len(suffix) - 1
+    return f"{raw[:prefix_length]}_{suffix}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,8 +48,21 @@ def spatial_index_plan(
     table = _identifier(table, "table")
     geometry_column = _identifier(geometry_column, "geometry_column")
     exact_column = _identifier(exact_column, "exact_column")
-    polygon_name = f"idx_{table}_{geometry_column}_exact_gist"
-    radius_name = f"idx_{table}_{geometry_column}_exact_geography_gist"
+    polygon_name = _bounded_index_name(
+        "idx",
+        table,
+        geometry_column,
+        "exact",
+        "gist",
+    )
+    radius_name = _bounded_index_name(
+        "idx",
+        table,
+        geometry_column,
+        "exact",
+        "geography",
+        "gist",
+    )
     exact_predicate = f"WHERE {geometry_column} IS NOT NULL AND {exact_column}"
     return (
         PostGISIndexSpec(
