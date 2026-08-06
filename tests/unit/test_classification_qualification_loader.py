@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from soika_uds.classification.qualification_loader import (
-    qualification_input_from_dict,
-)
+from soika_uds.classification.qualification_loader import qualification_input_from_dict
 
 
 POLICY = {
