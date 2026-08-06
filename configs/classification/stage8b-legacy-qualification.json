@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "models": [
     {
       "role": "category",
@@ -16,6 +16,8 @@
       "weights_sha256": null,
       "tokenizer_id": "cointegrated/rubert-tiny2",
       "tokenizer_revision": "e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae",
+      "label_space": [],
+      "label_map": {},
       "evidence_urls": [
         "https://huggingface.co/Sandrro/text_to_function_v2",
         "https://huggingface.co/cointegrated/rubert-tiny2/commits/e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae"
@@ -23,7 +25,8 @@
       "notes": [
         "The repository and MIT metadata were confirmed on the official model page.",
         "The model card does not document the training or evaluation dataset sufficiently for production review.",
-        "The mutable main reference must not be used for production until an immutable model commit and weights digest are recorded."
+        "The mutable main reference must not be used for production until an immutable model commit and weights digest are recorded.",
+        "The complete category label space has not been approved."
       ]
     },
     {
@@ -41,6 +44,8 @@
       "weights_sha256": null,
       "tokenizer_id": "cointegrated/rubert-tiny2",
       "tokenizer_revision": "e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae",
+      "label_space": [],
+      "label_map": {},
       "evidence_urls": [
         "https://huggingface.co/Sandrro",
         "https://huggingface.co/cointegrated/rubert-tiny2/commits/e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae"
@@ -48,10 +53,11 @@
       "notes": [
         "The requested v10 repository was not present in the author's public model list during the 2026-08-06 review.",
         "The public list contained text_to_subfunction_v7 and text_to_topic; neither is substituted automatically for v10.",
-        "License, training data, immutable revision, weights format and weights digest remain unconfirmed."
+        "License, training data, immutable revision, weights format, weights digest and label space remain unconfirmed."
       ]
     }
   ],
+  "topic_hierarchy": {},
   "validation": null,
   "benchmarks": [],
   "quality": null,

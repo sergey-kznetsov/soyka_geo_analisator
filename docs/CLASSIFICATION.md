@@ -1,63 +1,107 @@
 # Классификация и уточнение тем
 
-Стадия классификации выполняется после `PipelineStage.PREPROCESSING` и до геолокации. Она принимает только JSON-compatible сообщения preprocessing и не изменяет исходный текст.
+Стадия классификации выполняется после `PipelineStage.PREPROCESSING` и до геолокации. Она принимает JSON-compatible результат preprocessing, использует `model_text` и не изменяет исходный текст.
 
 ## Поток
 
-1. Из preprocessing выбираются принятые сообщения, включённые в анализ.
-2. `ClassificationRegistry` проверяет наличие моделей `category` и `topic`.
-3. Для модели и токенизатора обязательны immutable revision.
-4. Модель должна быть явно помечена `approved_for_production=true`.
-5. `PredictionBackend` выполняет пакетный inference.
-6. Scores проходят через зафиксированный калибратор.
-7. Пороговые правила формируют `low_confidence` и причины.
-8. Результат содержит model, tokenizer, registry, config и calibration provenance.
-9. `ClassificationStageHandler` сохраняет JSON-only output стадии `NLP`.
+1. Выбираются принятые сообщения, включённые в анализ.
+2. Production registry проверяет category/topic models и успешный qualification report.
+3. Backend выполняет пакетный category inference.
+4. Category score калибруется.
+5. Для предсказанной категории registry возвращает разрешённый набор уточнённых тем.
+6. Topic inference фильтруется по этому набору до выбора результата.
+7. Topic score калибруется.
+8. Независимые пороги формируют low-confidence и причины.
+9. Общий confidence band рассчитывается по обоим результатам.
+10. Результат сохраняет model, tokenizer, weights, registry, qualification, config, device и calibration provenance.
+11. `ClassificationStageHandler` сохраняет JSON-only output стадии `NLP`.
 
-## Fail-closed model registry
+## Production registry schema 2
 
-Production registry не загружается, если:
+Для каждой модели обязательны:
 
-- отсутствует category или topic model;
-- присутствует неизвестная роль;
-- revision равна `main` или `master`;
-- revision не является immutable идентификатором;
-- лицензия или обучающие данные не прошли review;
-- `approved_for_production=false`.
+- роль и совпадающий `task`;
+- repository ID;
+- полный 40-символьный model commit SHA;
+- tokenizer ID и полный tokenizer commit SHA;
+- SHA-256 весов;
+- проверенная лицензия и training-data review;
+- явный production approval;
+- полный label space;
+- необязательный label map, все значения которого входят в label space.
 
-Модель не становится разрешённой автоматически после технической загрузки. Одобрение требует отдельного документированного решения по лицензии, происхождению данных, ограничениям и результатам валидации.
+Registry также содержит полный `topic_hierarchy`. Набор ключей hierarchy обязан точно совпадать с category label space, а объединение тем — с topic label space.
+
+Registry загружается только вместе с qualification report. Report должен иметь `approved_for_production=true`, пустой список blockers, корректный `report_digest` и `model_registry_digest`, совпадающий с runtime registry.
+
+## Immutable revisions
+
+Строковые ветки, теги и сокращённые SHA запрещены. Значения `main`, `master`, `release-v1`, `latest` и аналогичные не проходят контракт. Допускается только lowercase hexadecimal commit SHA длиной 40 символов.
+
+## Model registry digest
+
+Канонический digest включает:
+
+- role;
+- repo ID;
+- model revision;
+- weights SHA-256;
+- tokenizer ID и revision;
+- task;
+- label space;
+- label map;
+- topic hierarchy.
+
+Этот же digest обязан присутствовать в CPU/GPU benchmark и quality evidence.
 
 ## Confidence
 
-Конфигурация содержит независимые пороги категории и темы. Низкая уверенность всегда сохраняется в результате и не заменяется наиболее вероятной меткой без предупреждения.
+Category и topic имеют отдельные пороги. Результат считается low-confidence, если хотя бы один score ниже своего порога.
 
-Калибровка поддерживает:
+Общий band:
 
-- identity calibrator для тестов и неподтверждённых экспериментальных запусков;
-- piecewise-linear curve, построенную на утверждённом validation set;
-- обязательный digest validation set в provenance.
+- `low` — хотя бы один score ниже соответствующего порога;
+- `high` — оба score не ниже high-confidence threshold;
+- `medium` — остальные допустимые случаи.
 
-Коэффициенты нельзя выбирать по производственным данным задним числом.
+Поэтому результат не может одновременно иметь `confidence_band=high` и `low_confidence=true`.
+
+## Calibration
+
+Поддерживаются identity calibrator и monotonic piecewise-linear curve. Production curve должна иметь digest утверждённого validation set. Коэффициенты нельзя подбирать по production data задним числом.
+
+## Backend
+
+`TransformersPredictionBackend`:
+
+- использует одинаковый контракт CPU/GPU;
+- по умолчанию передаёт `local_files_only=true`;
+- поддерживает artifact verifier до создания pipeline;
+- кеширует pipeline по model repo, model revision, weights digest, tokenizer ID, tokenizer revision и device.
+
+Artifact verifier должен сопоставить descriptor с установленным и проверенным локальным артефактом.
+
+## Provenance
+
+Provenance содержит:
+
+- runtime registry digest;
+- model registry digest;
+- qualification report digest;
+- config digest;
+- device;
+- полные category/topic descriptors;
+- разрешённые темы выбранной категории;
+- calibration descriptors.
+
+Вся вложенная структура рекурсивно неизменяема. Сериализация не изменяет рассчитанный output digest.
 
 ## Quality validation
 
-`evaluate_predictions` рассчитывает:
+`evaluate_predictions` рассчитывает accuracy, macro-precision, macro-recall, macro-F1, per-label metrics, confusion matrices, ECE, Brier score, calibration bins и low-confidence rate.
 
-- category accuracy;
-- category macro-F1;
-- topic accuracy;
-- topic macro-F1;
-- долю low-confidence;
-- digest отчёта.
+Qualification дополнительно требует точного совпадения полного label space validation set с квалифицируемыми моделями, минимального числа примеров по каждой метке, утверждения набора, глубины разметки и согласованности аннотаторов.
 
-Drift отслеживается сравнением распределений меток через total variation distance. Порог алерта должен утверждаться после получения базового производственного распределения.
+## Legacy models
 
-## CPU/GPU
-
-`TransformersPredictionBackend` использует одинаковые model/tokenizer revisions и один контракт результата. CPU соответствует `device=-1`, GPU — `device=0`. Выбор устройства входит в provenance.
-
-## Ограничения legacy-моделей
-
-`Sandrro/text_to_function_v2` имеет MIT metadata, но model card не описывает обучающий набор. Для topic-модели в текущем manifest указана неизвестная лицензия и требуется проверка существования репозитория, immutable revision и обучающих данных. До закрытия этих вопросов legacy-модели не должны получать production approval.
-
-Техническая платформа этапа не заменяет оценку качества и юридический аудит конкретных весов модели.
+Текущие legacy category/topic models не имеют полного набора доказательств и не должны загружаться в production registry. Техническая доступность репозитория или ручной флаг approval не заменяют qualification.

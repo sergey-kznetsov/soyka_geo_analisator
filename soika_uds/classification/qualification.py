@@ -6,7 +6,7 @@ import json
 import math
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
@@ -32,7 +32,9 @@ def _optional(value: object, field_name: str) -> str | None:
 
 
 def _finite(value: object, field_name: str, *, minimum: float = 0.0) -> float:
-    if not isinstance(value, int | float) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError(f"{field_name} must be numeric")
+    if not math.isfinite(value):
         raise ValueError(f"{field_name} must be finite")
     result = float(value)
     if result < minimum:
@@ -84,7 +86,10 @@ def _strict_fields(
 def _string_tuple(value: object, field_name: str) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, str | bytes | bytearray):
         raise ValueError(f"{field_name} must be an array")
-    return tuple(_required(item, f"{field_name}[]") for item in value)
+    result = tuple(_required(item, f"{field_name}[]") for item in value)
+    if len(result) != len(set(result)):
+        raise ValueError(f"{field_name} must contain unique values")
+    return result
 
 
 def _count_mapping(value: object, field_name: str) -> Mapping[str, int]:
@@ -94,6 +99,35 @@ def _count_mapping(value: object, field_name: str) -> Mapping[str, int]:
     for raw_label, raw_count in value.items():
         label = _required(raw_label, f"{field_name} label")
         result[label] = _positive_int(raw_count, f"{field_name}.{label}")
+    return MappingProxyType(dict(sorted(result.items())))
+
+
+def _string_mapping(value: object, field_name: str) -> Mapping[str, str]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{field_name} must be an object")
+    return MappingProxyType(
+        {
+            _required(key, f"{field_name} key"): _required(
+                item, f"{field_name}.{key}"
+            )
+            for key, item in sorted(value.items())
+        }
+    )
+
+
+def _hierarchy_mapping(
+    value: object,
+    field_name: str,
+) -> Mapping[str, tuple[str, ...]]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{field_name} must be an object")
+    result: dict[str, tuple[str, ...]] = {}
+    for category, topics in value.items():
+        normalized_category = _required(category, f"{field_name} category")
+        normalized_topics = _string_tuple(topics, f"{field_name}.{normalized_category}")
+        if not normalized_topics:
+            raise ValueError(f"{field_name}.{normalized_category} must not be empty")
+        result[normalized_category] = normalized_topics
     return MappingProxyType(dict(sorted(result.items())))
 
 
@@ -145,6 +179,8 @@ class ModelAuditRecord:
     weights_sha256: str | None
     tokenizer_id: str
     tokenizer_revision: str | None
+    label_space: tuple[str, ...] = ()
+    label_map: Mapping[str, str] = field(default_factory=dict)
     evidence_urls: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
 
@@ -163,11 +199,7 @@ class ModelAuditRecord:
         object.__setattr__(
             self,
             "resolved_revision",
-            _commit(
-                self.resolved_revision,
-                "model.resolved_revision",
-                optional=True,
-            ),
+            _commit(self.resolved_revision, "model.resolved_revision", optional=True),
         )
         object.__setattr__(
             self,
@@ -206,6 +238,12 @@ class ModelAuditRecord:
                 optional=True,
             ),
         )
+        labels = _string_tuple(self.label_space, "model.label_space")
+        object.__setattr__(self, "label_space", labels)
+        mapping = _string_mapping(self.label_map, "model.label_map")
+        if set(mapping.values()) - set(labels):
+            raise ValueError("model.label_map targets must belong to label_space")
+        object.__setattr__(self, "label_map", mapping)
         object.__setattr__(
             self,
             "evidence_urls",
@@ -216,6 +254,19 @@ class ModelAuditRecord:
             "notes",
             _string_tuple(self.notes, "model.notes"),
         )
+
+    def artifact_dict(self) -> dict[str, Any]:
+        return {
+            "role": self.role,
+            "repo_id": self.repo_id,
+            "revision": self.resolved_revision,
+            "weights_sha256": self.weights_sha256,
+            "tokenizer_id": self.tokenizer_id,
+            "tokenizer_revision": self.tokenizer_revision,
+            "task": self.role,
+            "label_space": list(self.label_space),
+            "label_map": dict(sorted(self.label_map.items())),
+        }
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -233,6 +284,8 @@ class ModelAuditRecord:
             "weights_sha256": self.weights_sha256,
             "tokenizer_id": self.tokenizer_id,
             "tokenizer_revision": self.tokenizer_revision,
+            "label_space": list(self.label_space),
+            "label_map": dict(self.label_map),
             "evidence_urls": list(self.evidence_urls),
             "notes": list(self.notes),
         }
@@ -253,14 +306,10 @@ class ValidationSetEvidence:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self,
-            "dataset_id",
-            _required(self.dataset_id, "validation.dataset_id"),
+            self, "dataset_id", _required(self.dataset_id, "validation.dataset_id")
         )
         object.__setattr__(
-            self,
-            "version",
-            _required(self.version, "validation.version"),
+            self, "version", _required(self.version, "validation.version")
         )
         object.__setattr__(self, "digest", _sha256(self.digest, "validation.digest"))
         object.__setattr__(
@@ -300,10 +349,7 @@ class ValidationSetEvidence:
         object.__setattr__(
             self,
             "approval_reference",
-            _optional(
-                self.approval_reference,
-                "validation.approval_reference",
-            ),
+            _optional(self.approval_reference, "validation.approval_reference"),
         )
         if self.approved and self.approval_reference is None:
             raise ValueError("approved validation set requires approval_reference")
@@ -388,6 +434,8 @@ class BenchmarkEvidence:
 @dataclass(frozen=True, slots=True)
 class QualityEvidence:
     report_digest: str
+    model_registry_digest: str
+    validation_digest: str
     samples: int
     category_macro_f1: float
     category_macro_recall: float
@@ -401,11 +449,16 @@ class QualityEvidence:
     baseline_digest: str | None
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
+        for field_name in (
             "report_digest",
-            _sha256(self.report_digest, "quality.report_digest"),
-        )
+            "model_registry_digest",
+            "validation_digest",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _sha256(getattr(self, field_name), f"quality.{field_name}"),
+            )
         object.__setattr__(
             self,
             "samples",
@@ -448,6 +501,8 @@ class QualityEvidence:
     def to_dict(self) -> dict[str, Any]:
         return {
             "report_digest": self.report_digest,
+            "model_registry_digest": self.model_registry_digest,
+            "validation_digest": self.validation_digest,
             "samples": self.samples,
             "category_macro_f1": self.category_macro_f1,
             "category_macro_recall": self.category_macro_recall,
@@ -514,8 +569,10 @@ class QualificationPolicy:
             _required(item, "policy.allowed_weight_formats[]").casefold()
             for item in self.allowed_weight_formats
         )
-        if len(formats) != len(set(formats)):
-            raise ValueError("policy.allowed_weight_formats must be unique")
+        if not formats or len(formats) != len(set(formats)):
+            raise ValueError(
+                "policy.allowed_weight_formats must be non-empty and unique"
+            )
         object.__setattr__(self, "allowed_weight_formats", formats)
 
     def to_dict(self) -> dict[str, Any]:
@@ -530,9 +587,7 @@ class QualificationPolicy:
             "min_topic_macro_f1": self.min_topic_macro_f1,
             "min_topic_macro_recall": self.min_topic_macro_recall,
             "max_low_confidence_rate": self.max_low_confidence_rate,
-            "max_expected_calibration_error": (
-                self.max_expected_calibration_error
-            ),
+            "max_expected_calibration_error": self.max_expected_calibration_error,
             "max_drift_tvd": self.max_drift_tvd,
             "min_benchmark_repeats": self.min_benchmark_repeats,
             "require_gpu": self.require_gpu,
@@ -544,6 +599,7 @@ class QualificationPolicy:
 class QualificationInput:
     models: tuple[ModelAuditRecord, ...]
     policy: QualificationPolicy
+    topic_hierarchy: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     validation: ValidationSetEvidence | None = None
     benchmarks: tuple[BenchmarkEvidence, ...] = ()
     quality: QualityEvidence | None = None
@@ -551,6 +607,11 @@ class QualificationInput:
     def __post_init__(self) -> None:
         object.__setattr__(self, "models", tuple(self.models))
         object.__setattr__(self, "benchmarks", tuple(self.benchmarks))
+        object.__setattr__(
+            self,
+            "topic_hierarchy",
+            _hierarchy_mapping(self.topic_hierarchy, "topic_hierarchy"),
+        )
         roles = [model.role for model in self.models]
         if len(roles) != len(set(roles)):
             raise ValueError("qualification models must have unique roles")
@@ -560,8 +621,12 @@ class QualificationInput:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "models": [model.to_dict() for model in self.models],
+            "topic_hierarchy": {
+                category: list(topics)
+                for category, topics in self.topic_hierarchy.items()
+            },
             "validation": self.validation.to_dict() if self.validation else None,
             "benchmarks": [item.to_dict() for item in self.benchmarks],
             "quality": self.quality.to_dict() if self.quality else None,
@@ -574,21 +639,28 @@ class QualificationReport:
     approved_for_production: bool
     gates: tuple[GateResult, ...]
     input_digest: str
+    model_registry_digest: str
+    validation_digest: str | None
     report_digest: str
 
     def __post_init__(self) -> None:
         if not isinstance(self.approved_for_production, bool):
             raise TypeError("approved_for_production must be boolean")
         object.__setattr__(self, "gates", tuple(self.gates))
-        object.__setattr__(
-            self,
+        for field_name in (
             "input_digest",
-            _sha256(self.input_digest, "input_digest"),
-        )
+            "model_registry_digest",
+            "report_digest",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _sha256(getattr(self, field_name), field_name),
+            )
         object.__setattr__(
             self,
-            "report_digest",
-            _sha256(self.report_digest, "report_digest"),
+            "validation_digest",
+            _sha256(self.validation_digest, "validation_digest", optional=True),
         )
 
     @property
@@ -603,8 +675,25 @@ class QualificationReport:
             "gates": [gate.to_dict() for gate in self.gates],
             "blockers": list(self.blockers),
             "input_digest": self.input_digest,
+            "model_registry_digest": self.model_registry_digest,
+            "validation_digest": self.validation_digest,
             "report_digest": self.report_digest,
         }
+
+
+def audited_model_registry_digest(inputs: QualificationInput) -> str:
+    payload = {
+        "schema_version": 2,
+        "models": {
+            model.role: model.artifact_dict()
+            for model in sorted(inputs.models, key=lambda item: item.role)
+        },
+        "topic_hierarchy": {
+            category: sorted(topics)
+            for category, topics in inputs.topic_hierarchy.items()
+        },
+    }
+    return digest_json(payload)
 
 
 def _gate(
@@ -626,9 +715,24 @@ def _minimum_count(values: Mapping[str, int]) -> int:
     return min(values.values()) if values else 0
 
 
+def _hierarchy_valid(
+    models: Mapping[str, ModelAuditRecord],
+    hierarchy: Mapping[str, tuple[str, ...]],
+) -> bool:
+    category = models.get("category")
+    topic = models.get("topic")
+    if category is None or topic is None:
+        return False
+    if set(hierarchy) != set(category.label_space):
+        return False
+    hierarchy_topics = {item for values in hierarchy.values() for item in values}
+    return hierarchy_topics == set(topic.label_space)
+
+
 def qualify_release(inputs: QualificationInput) -> QualificationReport:
     gates: list[GateResult] = []
     models = {model.role: model for model in inputs.models}
+    expected_registry_digest = audited_model_registry_digest(inputs)
 
     for role in sorted(_ALLOWED_ROLES):
         model = models.get(role)
@@ -707,6 +811,13 @@ def qualify_release(inputs: QualificationInput) -> QualificationReport:
                     evidence,
                 ),
                 _gate(
+                    f"model.{role}.label_space",
+                    bool(model.label_space),
+                    "model label space is recorded",
+                    "model label space is missing",
+                    evidence,
+                ),
+                _gate(
                     f"model.{role}.evidence",
                     bool(model.evidence_urls),
                     "source evidence is recorded",
@@ -715,6 +826,15 @@ def qualify_release(inputs: QualificationInput) -> QualificationReport:
                 ),
             ]
         )
+
+    gates.append(
+        _gate(
+            "taxonomy.hierarchy",
+            _hierarchy_valid(models, inputs.topic_hierarchy),
+            "category-to-topic hierarchy covers the complete label space",
+            "category-to-topic hierarchy is missing or incomplete",
+        )
+    )
 
     validation = inputs.validation
     gates.append(
@@ -726,6 +846,16 @@ def qualify_release(inputs: QualificationInput) -> QualificationReport:
         )
     )
     if validation is not None:
+        category_labels = (
+            set(models.get("category").label_space)
+            if models.get("category")
+            else set()
+        )
+        topic_labels = (
+            set(models.get("topic").label_space)
+            if models.get("topic")
+            else set()
+        )
         gates.extend(
             [
                 _gate(
@@ -741,6 +871,20 @@ def qualify_release(inputs: QualificationInput) -> QualificationReport:
                     >= inputs.policy.min_validation_samples,
                     "validation sample count meets policy",
                     "validation sample count is below policy",
+                ),
+                _gate(
+                    "validation.category_label_space",
+                    set(validation.category_counts) == category_labels
+                    and bool(category_labels),
+                    "validation category labels exactly match the qualified model",
+                    "validation category labels do not match the qualified model",
+                ),
+                _gate(
+                    "validation.topic_label_space",
+                    set(validation.topic_counts) == topic_labels
+                    and bool(topic_labels),
+                    "validation topic labels exactly match the qualified model",
+                    "validation topic labels do not match the qualified model",
                 ),
                 _gate(
                     "validation.category_coverage",
@@ -815,6 +959,12 @@ def qualify_release(inputs: QualificationInput) -> QualificationReport:
                     f"{device.value} benchmark used the approved validation set",
                     f"{device.value} benchmark validation evidence differs",
                 ),
+                _gate(
+                    f"benchmark.{device.value}.model_registry",
+                    benchmark.model_registry_digest == expected_registry_digest,
+                    f"{device.value} benchmark used the audited model registry",
+                    f"{device.value} benchmark model registry differs from the audited models",
+                ),
             ]
         )
 
@@ -846,17 +996,28 @@ def qualify_release(inputs: QualificationInput) -> QualificationReport:
         )
     )
     if quality is not None:
-        sample_match = (
-            validation is not None
-            and quality.samples == validation.sample_count
-        )
+        validation_digest = validation.digest if validation is not None else None
         gates.extend(
             [
                 _gate(
                     "quality.samples",
-                    sample_match,
+                    validation is not None
+                    and quality.samples == validation.sample_count,
                     "quality report covers the approved validation set",
                     "quality report sample count differs from validation",
+                ),
+                _gate(
+                    "quality.validation_digest",
+                    validation_digest is not None
+                    and quality.validation_digest == validation_digest,
+                    "quality report is bound to the approved validation set",
+                    "quality report validation digest differs",
+                ),
+                _gate(
+                    "quality.model_registry",
+                    quality.model_registry_digest == expected_registry_digest,
+                    "quality report is bound to the audited model registry",
+                    "quality report model registry differs from audited models",
                 ),
                 _gate(
                     "quality.category_macro_f1",
@@ -929,15 +1090,20 @@ def qualify_release(inputs: QualificationInput) -> QualificationReport:
 
     input_digest = digest_json(inputs.to_dict())
     approved = all(gate.state is GateState.PASSED for gate in gates)
+    validation_digest = validation.digest if validation is not None else None
     report_payload = {
         "approved_for_production": approved,
         "gates": [gate.to_dict() for gate in gates],
         "input_digest": input_digest,
+        "model_registry_digest": expected_registry_digest,
+        "validation_digest": validation_digest,
     }
     return QualificationReport(
         approved_for_production=approved,
         gates=tuple(gates),
         input_digest=input_digest,
+        model_registry_digest=expected_registry_digest,
+        validation_digest=validation_digest,
         report_digest=digest_json(report_payload),
     )
 
@@ -958,6 +1124,8 @@ def _model_from_dict(payload: Mapping[str, Any]) -> ModelAuditRecord:
         "weights_sha256",
         "tokenizer_id",
         "tokenizer_revision",
+        "label_space",
+        "label_map",
         "evidence_urls",
         "notes",
     }
@@ -1003,6 +1171,8 @@ def _benchmark_from_dict(payload: Mapping[str, Any]) -> BenchmarkEvidence:
 def _quality_from_dict(payload: Mapping[str, Any]) -> QualityEvidence:
     allowed = {
         "report_digest",
+        "model_registry_digest",
+        "validation_digest",
         "samples",
         "category_macro_f1",
         "category_macro_recall",
@@ -1045,23 +1215,37 @@ def qualification_input_from_dict(payload: Mapping[str, Any]) -> QualificationIn
     allowed = {
         "schema_version",
         "models",
+        "topic_hierarchy",
         "validation",
         "benchmarks",
         "quality",
         "policy",
     }
     _strict_fields(payload, allowed, "qualification")
-    if payload.get("schema_version") != 1:
+    if payload.get("schema_version") != 2:
         raise ValueError("unsupported qualification schema_version")
     raw_models = payload.get("models")
     raw_benchmarks = payload.get("benchmarks", [])
     raw_policy = payload.get("policy")
-    if not isinstance(raw_models, Sequence) or isinstance(raw_models, str):
+    raw_hierarchy = payload.get("topic_hierarchy", {})
+    if not isinstance(raw_models, Sequence) or isinstance(
+        raw_models,
+        str | bytes | bytearray,
+    ):
         raise ValueError("qualification models must be an array")
-    if not isinstance(raw_benchmarks, Sequence) or isinstance(raw_benchmarks, str):
+    if any(not isinstance(item, Mapping) for item in raw_models):
+        raise ValueError("qualification models entries must be objects")
+    if not isinstance(raw_benchmarks, Sequence) or isinstance(
+        raw_benchmarks,
+        str | bytes | bytearray,
+    ):
         raise ValueError("qualification benchmarks must be an array")
+    if any(not isinstance(item, Mapping) for item in raw_benchmarks):
+        raise ValueError("qualification benchmarks entries must be objects")
     if not isinstance(raw_policy, Mapping):
         raise ValueError("qualification policy must be an object")
+    if not isinstance(raw_hierarchy, Mapping):
+        raise ValueError("qualification topic_hierarchy must be an object")
     raw_validation = payload.get("validation")
     raw_quality = payload.get("quality")
     if raw_validation is not None and not isinstance(raw_validation, Mapping):
@@ -1069,21 +1253,14 @@ def qualification_input_from_dict(payload: Mapping[str, Any]) -> QualificationIn
     if raw_quality is not None and not isinstance(raw_quality, Mapping):
         raise ValueError("qualification quality must be an object or null")
     return QualificationInput(
-        models=tuple(
-            _model_from_dict(item)
-            for item in raw_models
-            if isinstance(item, Mapping)
-        ),
+        models=tuple(_model_from_dict(item) for item in raw_models),
+        topic_hierarchy=raw_hierarchy,
         validation=(
             _validation_from_dict(raw_validation)
             if isinstance(raw_validation, Mapping)
             else None
         ),
-        benchmarks=tuple(
-            _benchmark_from_dict(item)
-            for item in raw_benchmarks
-            if isinstance(item, Mapping)
-        ),
+        benchmarks=tuple(_benchmark_from_dict(item) for item in raw_benchmarks),
         quality=(
             _quality_from_dict(raw_quality)
             if isinstance(raw_quality, Mapping)
@@ -1110,6 +1287,7 @@ __all__ = [
     "QualificationReport",
     "QualityEvidence",
     "ValidationSetEvidence",
+    "audited_model_registry_digest",
     "load_qualification_input",
     "qualification_input_from_dict",
     "qualify_release",

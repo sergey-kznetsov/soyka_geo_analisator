@@ -22,6 +22,7 @@ from .models import (
     LabelPrediction,
     MessageClassificationResult,
     ModelDescriptor,
+    classification_model_registry_digest,
 )
 from .orchestration import ClassificationStageHandler
 from .qualification import (
@@ -34,6 +35,7 @@ from .qualification import (
     QualificationReport,
     QualityEvidence,
     ValidationSetEvidence,
+    audited_model_registry_digest,
     qualify_release,
 )
 from .qualification_loader import (
@@ -70,7 +72,9 @@ __all__ = [
     "TransformersPredictionBackend",
     "ValidationLabel",
     "ValidationSetEvidence",
+    "audited_model_registry_digest",
     "calibrate_scores",
+    "classification_model_registry_digest",
     "evaluate_predictions",
     "label_distribution",
     "load_classification_registry",

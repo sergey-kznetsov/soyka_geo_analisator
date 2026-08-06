@@ -34,24 +34,46 @@ def _top_prediction(
     candidates: Sequence[LabelPrediction],
     model: ModelDescriptor,
     calibrator: ScoreCalibrator,
+    *,
+    allowed_labels: Sequence[str] | None = None,
 ) -> LabelPrediction:
     if not candidates:
         raise ValueError(f"model {model.name} returned no predictions")
-    ordered = sorted(candidates, key=lambda item: (-item.score, item.label))
-    top = ordered[0]
-    mapped = model.label_map.get(top.label, top.label)
-    return LabelPrediction(
-        label=mapped,
-        score=calibrator.calibrate(top.score),
-    )
+    allowed = set(allowed_labels) if allowed_labels is not None else None
+    mapped: dict[str, float] = {}
+    for candidate in candidates:
+        label = model.label_map.get(candidate.label, candidate.label)
+        if label not in model.label_space:
+            raise ValueError(
+                f"model {model.name} returned label outside label_space: {label}"
+            )
+        if allowed is not None and label not in allowed:
+            continue
+        mapped[label] = max(mapped.get(label, 0.0), candidate.score)
+    if not mapped:
+        raise ValueError(
+            f"model {model.name} returned no prediction allowed by topic hierarchy"
+        )
+    label, score = sorted(mapped.items(), key=lambda item: (-item[1], item[0]))[0]
+    return LabelPrediction(label=label, score=calibrator.calibrate(score))
 
 
-def _confidence_band(score: float, config: ClassificationConfig) -> ConfidenceBand:
-    if score >= config.high_confidence_threshold:
+def _confidence_band(
+    category_score: float,
+    topic_score: float,
+    config: ClassificationConfig,
+) -> ConfidenceBand:
+    if (
+        category_score < config.category_threshold
+        or topic_score < config.topic_threshold
+    ):
+        return ConfidenceBand.LOW
+    if (
+        category_score >= config.high_confidence_threshold
+        and topic_score >= config.high_confidence_threshold
+    ):
         return ConfidenceBand.HIGH
-    if score >= config.category_threshold:
-        return ConfidenceBand.MEDIUM
-    return ConfidenceBand.LOW
+    return ConfidenceBand.MEDIUM
 
 
 def _eligible(message: Mapping[str, Any], config: ClassificationConfig) -> bool:
@@ -122,10 +144,12 @@ class ClassificationEngine:
                 category_model,
                 self._category_calibrator,
             )
+            allowed_topics = self._registry.allowed_topics(category.label)
             topic = _top_prediction(
                 topic_candidates,
                 topic_model,
                 self._topic_calibrator,
+                allowed_labels=allowed_topics,
             )
             reasons: list[str] = []
             if category.score < self._config.category_threshold:
@@ -137,10 +161,15 @@ class ClassificationEngine:
                 low_count += 1
             provenance = {
                 "registry_digest": self._registry.digest,
+                "model_registry_digest": self._registry.model_registry_digest,
+                "qualification_report_digest": (
+                    self._registry.qualification_report_digest
+                ),
                 "config_digest": self._config.digest,
                 "device": self._config.device.value,
                 "category_model": category_model.to_dict(),
                 "topic_model": topic_model.to_dict(),
+                "allowed_topics": list(allowed_topics),
                 "category_calibration": self._category_calibrator.descriptor,
                 "topic_calibration": self._topic_calibrator.descriptor,
             }
@@ -149,7 +178,11 @@ class ClassificationEngine:
                     message_key=str(message["message_key"]),
                     category=category,
                     topic=topic,
-                    confidence_band=_confidence_band(category.score, self._config),
+                    confidence_band=_confidence_band(
+                        category.score,
+                        topic.score,
+                        self._config,
+                    ),
                     low_confidence=low_confidence,
                     included_for_analysis=not low_confidence,
                     reasons=tuple(reasons),
