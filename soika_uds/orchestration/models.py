@@ -94,6 +94,7 @@ class PipelineStage(str, Enum):
     PREPROCESSING = "preprocessing"
     NLP = "nlp"
     GEOLOCATION = "geolocation"
+    FILTERING = "filtering"
     EVENTS = "events"
     SCORING = "scoring"
     FINALIZING = "finalizing"
@@ -108,6 +109,7 @@ _STAGE_STATUS: Mapping[PipelineStage, JobStatus] = MappingProxyType(
         PipelineStage.PREPROCESSING: JobStatus.PREPROCESSING,
         PipelineStage.NLP: JobStatus.CLASSIFYING,
         PipelineStage.GEOLOCATION: JobStatus.GEOCODING,
+        PipelineStage.FILTERING: JobStatus.FILTERING,
         PipelineStage.EVENTS: JobStatus.DETECTING_EVENTS,
         PipelineStage.SCORING: JobStatus.CALCULATING,
         PipelineStage.FINALIZING: JobStatus.CALCULATING,
@@ -120,8 +122,9 @@ _STAGE_PROGRESS: Mapping[PipelineStage, int] = MappingProxyType(
         PipelineStage.COLLECTION: 20,
         PipelineStage.PREPROCESSING: 35,
         PipelineStage.NLP: 55,
-        PipelineStage.GEOLOCATION: 72,
-        PipelineStage.EVENTS: 88,
+        PipelineStage.GEOLOCATION: 70,
+        PipelineStage.FILTERING: 80,
+        PipelineStage.EVENTS: 90,
         PipelineStage.SCORING: 97,
         PipelineStage.FINALIZING: 99,
     }
