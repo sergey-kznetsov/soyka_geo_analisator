@@ -12,6 +12,18 @@ from .models import AddressMention, MentionSource
 from .normalization import AddressNormalizer, is_missing
 
 
+def _hex_digest(value: object, length: int, field_name: str) -> str:
+    if not isinstance(value, str) or len(value) != length:
+        raise ValueError(f"{field_name} must contain {length} hexadecimal characters")
+    try:
+        int(value, 16)
+    except ValueError as error:
+        raise ValueError(
+            f"{field_name} must contain {length} hexadecimal characters"
+        ) from error
+    return value.lower()
+
+
 class MentionExtractor(Protocol):
     @property
     def identity(self) -> Mapping[str, Any]: ...
@@ -67,14 +79,27 @@ class LocalFlairAddressExtractor:
         loader: Callable[[str], Any] | None = None,
         min_score: float = 0.7,
     ) -> None:
-        self._path = Path(model_path)
-        self._revision = model_revision
-        self._weights_sha256 = weights_sha256
+        path = Path(model_path)
+        if not path.is_absolute():
+            raise ValueError("geolocation model path must be absolute")
+        if not 0.0 <= min_score <= 1.0:
+            raise ValueError("min_score must be in [0, 1]")
+        self._path = path
+        self._revision = _hex_digest(
+            model_revision,
+            40,
+            "model_revision",
+        )
+        self._weights_sha256 = _hex_digest(
+            weights_sha256,
+            64,
+            "weights_sha256",
+        )
         self._manager = manager
         self._artifact_verifier = artifact_verifier
         self._normalizer = normalizer or AddressNormalizer.with_pymorphy3()
         self._loader = loader
-        self._min_score = min_score
+        self._min_score = float(min_score)
 
     @property
     def identity(self) -> Mapping[str, Any]:
