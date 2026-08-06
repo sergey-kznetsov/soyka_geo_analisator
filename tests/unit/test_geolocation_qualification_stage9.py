@@ -5,6 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from pymorphy2.analyzer import MorphAnalyzer as LegacyModuleMorphAnalyzer
+from pymorphy2.analyzer import Parse as LegacyModuleParse
+from pymorphy3.analyzer import MorphAnalyzer, Parse
 from soika_uds.geolocation.qualification_api import (
     GateState,
     load_model_audit,
@@ -44,6 +47,11 @@ def _passing_metrics(*, model_smoke_passed: bool = True) -> dict:
         "low_confidence_rate": 0.0,
         "model_smoke_passed": model_smoke_passed,
     }
+
+
+def test_natasha_module_level_pymorphy2_bridge_uses_pymorphy3() -> None:
+    assert LegacyModuleMorphAnalyzer is MorphAnalyzer
+    assert LegacyModuleParse is Parse
 
 
 def test_committed_validation_manifest_has_stable_digest() -> None:
