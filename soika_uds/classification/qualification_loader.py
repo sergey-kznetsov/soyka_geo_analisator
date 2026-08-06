@@ -9,6 +9,8 @@ from typing import Any
 
 from .qualification import (
     QualificationInput,
+)
+from .qualification import (
     qualification_input_from_dict as _parse,
 )
 

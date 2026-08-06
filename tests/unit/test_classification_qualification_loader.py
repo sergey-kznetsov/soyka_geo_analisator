@@ -4,7 +4,6 @@ import pytest
 
 from soika_uds.classification.qualification_loader import qualification_input_from_dict
 
-
 POLICY = {
     "min_validation_samples": 100,
     "min_samples_per_category": 10,
