@@ -1,0 +1,38 @@
+name: stage8b-import-fix
+
+on:
+  push:
+    branches:
+      - agent/stage8b-model-qualification
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/stage8b-model-qualification
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.15"
+      - name: Apply Ruff import fixes
+        run: |
+          python -m pip install ruff==0.6.9
+          ruff check --fix \
+            soika_uds/classification/qualification_loader.py \
+            tests/unit/test_classification_qualification_loader.py
+          ruff check \
+            soika_uds/classification/qualification_loader.py \
+            tests/unit/test_classification_qualification_loader.py
+      - name: Remove temporary workflow
+        run: rm .github/workflows/stage8b-import-fix.yml
+      - name: Commit import normalization
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add soika_uds/classification/qualification_loader.py tests/unit/test_classification_qualification_loader.py .github/workflows/stage8b-import-fix.yml
+          git commit -m "Normalize stage 8B imports"
+          git push origin HEAD:agent/stage8b-model-qualification
