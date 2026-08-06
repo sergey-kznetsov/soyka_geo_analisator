@@ -25,8 +25,9 @@ POLICY = {
 
 def payload() -> dict[str, object]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "models": [],
+        "topic_hierarchy": {},
         "validation": None,
         "benchmarks": [],
         "quality": None,
@@ -45,4 +46,11 @@ def test_non_object_benchmark_entry_is_rejected() -> None:
     value = payload()
     value["benchmarks"] = [42]
     with pytest.raises(ValueError, match="benchmarks entries"):
+        qualification_input_from_dict(value)
+
+
+def test_non_object_hierarchy_is_rejected() -> None:
+    value = payload()
+    value["topic_hierarchy"] = []
+    with pytest.raises(ValueError, match="topic_hierarchy"):
         qualification_input_from_dict(value)
