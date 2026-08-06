@@ -7,7 +7,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from .qualification import QualificationInput, qualification_input_from_dict as _parse
+from .qualification import (
+    QualificationInput,
+    qualification_input_from_dict as _parse,
+)
 
 
 def _object_array(value: object, field_name: str) -> None:
