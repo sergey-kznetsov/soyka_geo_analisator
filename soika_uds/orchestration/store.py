@@ -54,7 +54,7 @@ def _migrate_legacy_checkpoints(payload: Mapping[str, Any]) -> dict[str, Any]:
     downstream_started = any(
         isinstance(item, Mapping)
         and item.get("state", CheckpointState.PENDING.value)
-        is not CheckpointState.PENDING.value
+        != CheckpointState.PENDING.value
         for item in downstream
     )
     state = (
