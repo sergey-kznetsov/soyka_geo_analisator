@@ -7,6 +7,9 @@ on:
     paths:
       - ".github/workflows/geolocation-qualification.yml"
       - "models/geolocation_*.json"
+      - "poetry.lock"
+      - "pyproject.toml"
+      - "pymorphy2/**"
       - "soika_uds/geolocation/**"
       - "tests/unit/test_geolocation_qualification_stage9.py"
 
@@ -20,7 +23,7 @@ permissions:
 jobs:
   qualify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 75
 
     steps:
       - uses: actions/checkout@v4
@@ -38,25 +41,36 @@ jobs:
             geolocation-qualification-v1-${{
             hashFiles('models/geolocation_validation_v1.json') }}
 
-      - name: Install pinned qualification runtime
+      - name: Install locked qualification runtime
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip poetry==2.4.1
+          poetry install --only main --no-root --no-interaction
           mkdir -p build/wheels
-          python -m pip download --no-deps natasha==1.6.0 --dest build/wheels
+          poetry run python -m pip download --no-deps natasha==1.6.0 --dest build/wheels
           echo "e12b130d05a0b4d2eb6442092ed5b5769a68a311c17f2095b1aa739fb8d6dc78  build/wheels/natasha-1.6.0-py3-none-any.whl" | sha256sum --check
-          python -m pip install \
-            build/wheels/natasha-1.6.0-py3-none-any.whl \
-            pyproj==3.7.2 \
-            pymorphy3==2.0.6 \
-            pymorphy3-dicts-ru==2.4.417150.4580142 \
-            requests==2.31.0
+          poetry run python - <<'PY'
+          import importlib.metadata
+          expected = {
+              "natasha": "1.6.0",
+              "navec": "0.10.0",
+              "razdel": "0.5.0",
+              "slovnet": "0.6.0",
+              "yargy": "0.16.0",
+              "pymorphy3": "2.0.6",
+              "requests": "2.31.0",
+          }
+          actual = {name: importlib.metadata.version(name) for name in expected}
+          if actual != expected:
+              raise SystemExit(f"locked qualification versions differ: {actual}")
+          print(actual)
+          PY
 
       - name: Run target-city qualification
         id: qualification
         shell: bash
         run: |
           set +e
-          python -m soika_uds.geolocation.qualification_cli \
+          poetry run python -m soika_uds.geolocation.qualification_cli \
             --audit models/geolocation_model_audit_v1.json \
             --validation models/geolocation_validation_v1.json \
             --output build/geolocation-qualification-report.json \
@@ -67,7 +81,9 @@ jobs:
             --allow-network
           status=$?
           set -e
-          cat build/geolocation-qualification-report.json
+          if test -f build/geolocation-qualification-report.json; then
+            cat build/geolocation-qualification-report.json
+          fi
           if test -f build/geolocation-production-registry.json; then
             cat build/geolocation-production-registry.json
           fi
