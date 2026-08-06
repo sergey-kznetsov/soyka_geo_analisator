@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
+from .calibration import IdentityCalibrator, ScoreCalibrator
 from .models import (
     ClassificationBatchResult,
     ClassificationConfig,
@@ -32,13 +33,17 @@ class PredictionBackend(Protocol):
 def _top_prediction(
     candidates: Sequence[LabelPrediction],
     model: ModelDescriptor,
+    calibrator: ScoreCalibrator,
 ) -> LabelPrediction:
     if not candidates:
         raise ValueError(f"model {model.name} returned no predictions")
     ordered = sorted(candidates, key=lambda item: (-item.score, item.label))
     top = ordered[0]
     mapped = model.label_map.get(top.label, top.label)
-    return LabelPrediction(label=mapped, score=top.score)
+    return LabelPrediction(
+        label=mapped,
+        score=calibrator.calibrate(top.score),
+    )
 
 
 def _confidence_band(score: float, config: ClassificationConfig) -> ConfidenceBand:
@@ -67,10 +72,15 @@ class ClassificationEngine:
         registry: ClassificationRegistry,
         backend: PredictionBackend,
         config: ClassificationConfig | None = None,
+        *,
+        category_calibrator: ScoreCalibrator | None = None,
+        topic_calibrator: ScoreCalibrator | None = None,
     ) -> None:
         self._registry = registry
         self._backend = backend
         self._config = config or ClassificationConfig()
+        self._category_calibrator = category_calibrator or IdentityCalibrator()
+        self._topic_calibrator = topic_calibrator or IdentityCalibrator()
 
     def classify(
         self,
@@ -107,8 +117,16 @@ class ClassificationEngine:
             topic_rows,
             strict=True,
         ):
-            category = _top_prediction(category_candidates, category_model)
-            topic = _top_prediction(topic_candidates, topic_model)
+            category = _top_prediction(
+                category_candidates,
+                category_model,
+                self._category_calibrator,
+            )
+            topic = _top_prediction(
+                topic_candidates,
+                topic_model,
+                self._topic_calibrator,
+            )
             reasons: list[str] = []
             if category.score < self._config.category_threshold:
                 reasons.append("category_below_threshold")
@@ -123,6 +141,8 @@ class ClassificationEngine:
                 "device": self._config.device.value,
                 "category_model": category_model.to_dict(),
                 "topic_model": topic_model.to_dict(),
+                "category_calibration": self._category_calibrator.descriptor,
+                "topic_calibration": self._topic_calibrator.descriptor,
             }
             results.append(
                 MessageClassificationResult(
