@@ -17,12 +17,18 @@ def test_postgis_plan_uses_index_aware_predicates() -> None:
     )
 
     queries = spatial_query_plan()
-    assert "ST_DWithin" in queries.radius_predicate
+    assert queries.radius_predicate.startswith(
+        "geom IS NOT NULL AND has_exact_geometry AND ST_DWithin"
+    )
     assert "geom::geography" in queries.radius_predicate
-    assert "ST_Covers" in queries.polygon_predicate
+    assert queries.polygon_predicate.startswith(
+        "geom IS NOT NULL AND has_exact_geometry AND ST_Covers"
+    )
     assert queries.required_srid == 4326
 
 
 def test_postgis_plan_rejects_unsafe_identifiers() -> None:
     with pytest.raises(ValueError, match="identifier"):
         spatial_index_plan(table="invalid-table-name")
+    with pytest.raises(ValueError, match="identifier"):
+        spatial_query_plan(exact_column="invalid-column-name")
