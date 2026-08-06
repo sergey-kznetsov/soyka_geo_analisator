@@ -137,17 +137,17 @@
 
 ## 8. Классификация и уточнение тем
 
-- закрепить модели по revision;
-- провести аудит лицензий и обучающих данных;
-- создать model registry;
-- добавить batch inference;
-- добавить калибровку confidence;
-- определить пороги low-confidence;
-- подготовить набор ручной валидации;
-- измерять quality drift;
-- обеспечить CPU/GPU режимы.
+**Этап 8A: техническая production-платформа — выполнено 6 августа 2026 года.**
 
-Критерий завершения: качество подтверждено на утверждённом наборе данных и воспроизводится на сервере.
+Реализованы строгий model registry, immutable revisions, batch inference, CPU/GPU backend contract, confidence thresholds, calibration, provenance и handler `PipelineStage.NLP`.
+
+**Этап 8B: квалификация моделей и release gates — выполнено 6 августа 2026 года.**
+
+Реализованы fail-closed model audit, validation-set evidence, CPU/GPU benchmark evidence, macro-precision/recall/F1, per-label metrics, confusion matrices, ECE, Brier score, low-confidence и drift gates, qualification CLI и машиночитаемый legacy audit. Подробности: `docs/MODEL_QUALIFICATION.md` и `docs/STAGE_8B_STATUS.md`.
+
+Текущие legacy-модели не получили production approval: category model не имеет достаточного training-data review и зафиксированных весов, а запрошенный topic repository v10 не подтверждён. Отсутствуют утверждённый validation set, реальные CPU/GPU benchmarks, calibration curve и drift baseline. Production registry остаётся заблокированным до закрытия всех gates.
+
+Критерий технического завершения 8B подтверждается детерминированными тестами qualification. Критерий качества конкретных весов считается выполненным только после отчёта `approved_for_production=true` на утверждённом validation set.
 
 ## 9. Геолокация и OSM-контур
 
