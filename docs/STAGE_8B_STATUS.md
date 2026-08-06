@@ -42,6 +42,19 @@ Geo Analyzer 2 не изменялся.
 
 Токенизатор `cointegrated/rubert-tiny2` зафиксирован на revision `e8ed3b0c8bbf4fb6984c3de043bf7d2f4e5969ae`, но это не снимает блокировки классификационных моделей.
 
+## Проверка audit manifest
+
+Текущий fail-closed результат воспроизводится командой:
+
+```bash
+python -m soika_uds.classification.qualification_cli \
+  --input configs/classification/stage8b-legacy-qualification.json \
+  --output qualification-report.json \
+  --strict
+```
+
+Для текущего audit manifest ожидается код возврата `2` и `approved_for_production=false`.
+
 ## Открытые внешние условия production approval
 
 Для фактического включения моделей необходимо:
