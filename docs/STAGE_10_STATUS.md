@@ -14,7 +14,9 @@ Geo Analyzer 2 не изменялся.
 
 Входной GeoJSON проверяется как RFC 7946 longitude/latitude. Неоднозначный member `crs`, неконечные или выходящие за допустимые диапазоны координаты, пустые, слишком крупные и топологически невалидные полигоны отклоняются fail-closed.
 
-Все метрические операции выполняются после преобразования точки и территории в одну локальную UTM CRS через `pyproj` с фиксированным порядком longitude/latitude. Пограничные точки включаются через семантику `covers`; после преобразования допускается фиксированный численный epsilon 0,5 м.
+Радиусное расстояние вычисляется как inverse geodesic на эллипсоиде WGS84. Это исключает ошибки выбора UTM-зоны при переходе через антимеридиан и искажения Web Mercator возле полюсов.
+
+Для полигональных predicates точка и территория преобразуются в одну локальную метрическую CRS через `pyproj` с фиксированным порядком longitude/latitude. Пограничные точки включаются через семантику `covers`; после преобразования допускается фиксированный численный epsilon 0,5 м.
 
 ## Решения
 
@@ -44,11 +46,17 @@ Geo Analyzer 2 не изменялся.
 - `ST_DWithin(...::geography, ...)` для радиуса в метрах;
 - `ST_Covers(...)` для полигона с включением границы.
 
-Индексные выражения совпадают с выражениями predicates. Фактическое создание таблиц и применение миграций остаётся частью этапа 13. Этап 10 фиксирует безопасный индекс-дружественный контракт.
+Индексные выражения совпадают с выражениями predicates. Запросы повторяют eligibility condition частичных индексов. Имена индексов ограничены 63 ASCII-байтами и получают стабильные SHA-256 suffixes при сокращении, поэтому geometry и geography indexes не совпадают после PostgreSQL truncation.
+
+Фактическое создание таблиц и применение миграций остаётся частью этапа 13. Этап 10 фиксирует безопасный индекс-дружественный контракт.
+
+## Qualification evidence
+
+Для несвязанных изменений CI детерминированно проверяет committed report и registry этапа 9, validation/model bindings, все gates, thresholds и SHA-256. Live Nominatim benchmark остаётся обязательным для изменений геолокационного кода, моделей, dependency lock или evidence и для ручного запуска. Изменчивость публичного провайдера не подменяет регрессионную проверку несвязанных этапов.
 
 ## Проверки
 
-Python compilation, Ruff и 228 deterministic unit/orchestration tests подтверждают радиус, Polygon/MultiPolygon, отверстия, границы, пересечение ограничений, fail-closed решения, порядок-независимые digests, CRS validation, PostGIS plan и миграцию legacy checkpoints. CI дополнительно проверяет `poetry.lock`, CPU Docker health/readiness, GPU target build и отсутствие регрессии qualification этапа 9.
+Python compilation, Ruff и 233 deterministic unit/orchestration tests подтверждают радиус, глобальные geodesic edge cases, Polygon/MultiPolygon, отверстия, границы, пересечение ограничений, fail-closed решения, порядок-независимые digests, CRS validation, bounded PostGIS identifiers, migration legacy checkpoints и tamper-resistant qualification evidence. CI дополнительно проверяет `poetry.lock`, CPU Docker health/readiness и GPU target build.
 
 ## Критерий завершения
 
