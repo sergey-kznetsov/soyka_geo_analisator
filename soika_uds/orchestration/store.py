@@ -6,18 +6,22 @@ import hashlib
 import importlib
 import json
 import os
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from threading import RLock
+from typing import Any
 from uuid import uuid4
 
 from .models import (
+    PIPELINE_STAGES,
+    CheckpointState,
     ConcurrentUpdateError,
     JobNotFoundError,
     JobRecord,
     OrchestrationError,
+    PipelineStage,
 )
 
 _file_locking = importlib.import_module(
@@ -27,6 +31,54 @@ _file_locking = importlib.import_module(
 
 class OrchestrationStoreError(OrchestrationError):
     """Raised when durable orchestration state cannot be read or written."""
+
+
+def _migrate_legacy_checkpoints(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Insert stage 10 into persisted pre-0.15 checkpoint sequences."""
+
+    migrated = dict(payload)
+    raw_checkpoints = migrated.get("checkpoints")
+    if not isinstance(raw_checkpoints, list):
+        return migrated
+    checkpoints = [dict(item) if isinstance(item, Mapping) else item for item in raw_checkpoints]
+    stages = [item.get("stage") if isinstance(item, Mapping) else None for item in checkpoints]
+    if PipelineStage.FILTERING.value in stages:
+        return migrated
+    legacy_stages = [
+        stage.value for stage in PIPELINE_STAGES if stage is not PipelineStage.FILTERING
+    ]
+    if stages != legacy_stages:
+        return migrated
+    geolocation_index = legacy_stages.index(PipelineStage.GEOLOCATION.value)
+    downstream = checkpoints[geolocation_index + 1 :]
+    downstream_started = any(
+        isinstance(item, Mapping)
+        and item.get("state", CheckpointState.PENDING.value)
+        is not CheckpointState.PENDING.value
+        for item in downstream
+    )
+    state = (
+        CheckpointState.COMPLETED.value
+        if downstream_started
+        else CheckpointState.PENDING.value
+    )
+    filtering_checkpoint: dict[str, Any] = {
+        "stage": PipelineStage.FILTERING.value,
+        "state": state,
+        "attempt": 0,
+        "output": {},
+        "warnings": [],
+    }
+    if downstream_started:
+        filtering_checkpoint["output"] = {
+            "spatial_filtering": {
+                "migration_status": "legacy_bypass",
+                "reason": "checkpoint_created_before_stage_10",
+            }
+        }
+    checkpoints.insert(geolocation_index + 1, filtering_checkpoint)
+    migrated["checkpoints"] = checkpoints
+    return migrated
 
 
 class InMemoryJobStore:
@@ -158,7 +210,7 @@ class FileJobStore:
             raise OrchestrationStoreError(
                 f"persisted job {path.name} must be a JSON object"
             )
-        return JobRecord.from_dict(payload)
+        return JobRecord.from_dict(_migrate_legacy_checkpoints(payload))
 
     def _load_unlocked(self, analysis_id: str) -> JobRecord:
         path = self._path(analysis_id)
