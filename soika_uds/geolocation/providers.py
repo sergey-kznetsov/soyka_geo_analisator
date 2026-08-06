@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import math
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
 from .cache import SQLiteResponseCache
+from .crs import haversine_distance_m
 from .models import (
     AddressMention,
     CandidateSource,
@@ -89,6 +90,8 @@ class NominatimClient:
     ) -> None:
         if not base_url.startswith("https://"):
             raise ValueError("Nominatim base URL must use HTTPS")
+        if not isinstance(ttl_seconds, int) or ttl_seconds < 1:
+            raise ValueError("Nominatim cache TTL must be positive")
         self._transport = transport
         self._cache = cache
         self._base_url = base_url.rstrip("/")
@@ -118,6 +121,8 @@ class NominatimClient:
         language: str,
         limit: int,
     ) -> Sequence[GeocodingCandidate]:
+        if not isinstance(limit, int) or not 1 <= limit <= 40:
+            raise ValueError("Nominatim limit must be in [1, 40]")
         params: dict[str, Any] = {
             "q": self._query(mention, city),
             "format": "jsonv2",
@@ -200,6 +205,8 @@ class OverpassClient:
             raise ValueError("Overpass base URL must use HTTPS")
         if not 1 <= timeout_seconds <= 180:
             raise ValueError("Overpass timeout must be in [1, 180]")
+        if not isinstance(ttl_seconds, int) or ttl_seconds < 1:
+            raise ValueError("Overpass cache TTL must be positive")
         self._transport = transport
         self._cache = cache
         self._base_url = base_url
@@ -216,7 +223,8 @@ class OverpassClient:
 
     @staticmethod
     def _escape(value: str) -> str:
-        return value.replace("\\", "\\\\").replace('"', '\\"')
+        escaped_regex = re.escape(value)
+        return escaped_regex.replace("\\", "\\\\").replace('"', '\\"')
 
     def nearby(
         self,
@@ -232,6 +240,10 @@ class OverpassClient:
             LocationKind.DISTRICT,
         }:
             return ()
+        if not isinstance(radius_m, int) or not 1 <= radius_m <= 50_000:
+            raise ValueError("Overpass radius must be in [1, 50000]")
+        if not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("Overpass limit must be in [1, 100]")
         name = self._escape(mention.poi or mention.district or mention.text)
         query = (
             f"[out:json][timeout:{self._timeout}];"
@@ -277,12 +289,10 @@ class OverpassClient:
             label = str(tags.get("name") or mention.text)
             osm_type = str(raw.get("type") or "") or None
             osm_id = raw.get("id") if isinstance(raw.get("id"), int) else None
-            distance = math.hypot(
-                point.longitude - center.longitude,
-                point.latitude - center.latitude,
-            )
+            distance_m = haversine_distance_m(center, point)
+            proximity = max(0.0, 1.0 - min(1.0, distance_m / radius_m))
             confidence = round(
-                max(0.2, 0.62 - min(0.35, distance * 20.0)),
+                max(0.2, min(0.62, 0.27 + 0.35 * proximity)),
                 6,
             )
             candidates.append(
