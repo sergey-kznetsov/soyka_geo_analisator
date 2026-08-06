@@ -1,0 +1,39 @@
+name: stage8b-normalize
+
+on:
+  push:
+    branches:
+      - agent/stage8b-model-qualification
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/stage8b-model-qualification
+      - name: Apply focused qualification fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("soika_uds/classification/qualification.py")
+          text = path.read_text(encoding="utf-8")
+          old = "        evidence=tuple(evidence),\n"
+          new = "        evidence=tuple(item for item in evidence if item),\n"
+          if text.count(old) != 1:
+              raise SystemExit("unexpected qualification evidence pattern")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+      - name: Remove temporary workflow
+        run: rm .github/workflows/stage8b-normalize.yml
+      - name: Commit focused fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add soika_uds/classification/qualification.py .github/workflows/stage8b-normalize.yml
+          git commit -m "Fix empty qualification evidence"
+          git push origin HEAD:agent/stage8b-model-qualification
