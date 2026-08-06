@@ -32,14 +32,41 @@ class MentionExtractor(Protocol):
 
 
 class RuleBasedMentionExtractor:
-    """Deterministic fallback for explicit address-like phrases."""
+    """Precision-oriented fallback for explicit address-like phrases."""
 
-    _pattern = re.compile(
-        r"(?:\b(?:ул(?:ица)?|пр(?:оспект)?|пер(?:еулок)?|наб(?:ережная)?|"
-        r"бул(?:ьвар)?|ш(?:оссе)?|проезд|пл(?:ощадь)?|район|микрорайон)\.?\s+"
-        r"[А-Яа-яЁёA-Za-z0-9\- ]{2,80}|\b(?:школа|поликлиника|парк|мост|"
-        r"вокзал|станция метро)\s+[А-Яа-яЁёA-Za-z0-9\-\" ]{1,80})",
-        re.I,
+    _street_type = (
+        r"(?:ул(?:ица)?|пр(?:оспект)?|пер(?:еулок)?|наб(?:ережная)?|"
+        r"бул(?:ьвар)?|ш(?:оссе)?|проезд|пл(?:ощадь)?|аллея|дорога)"
+    )
+    _name_token = (
+        r"(?:[А-ЯЁA-Z][А-Яа-яЁёA-Za-z0-9.\-]*|\d+|лет|года|годов|"
+        r"им(?:ени)?\.?)"
+    )
+    _street = rf"\b{_street_type}\.?\s+{_name_token}(?:\s+{_name_token}){{0,4}}"
+    _house = (
+        r"(?:\s*,?\s*(?:д(?:ом)?\.?\s*)?\d+[А-Яа-яA-Za-z]?"
+        r"(?:\s*(?:к|корп(?:ус)?\.?)\s*\d+[А-Яа-яA-Za-z]?)?)?"
+    )
+    _patterns = (
+        re.compile(
+            rf"{_street}{_house}\s+(?:и|/|пересечени[ея]|угол)\s+"
+            rf"{_street}{_house}",
+            re.I,
+        ),
+        re.compile(rf"{_street}{_house}", re.I),
+        re.compile(
+            r"\b(?:район|микрорайон|округ|квартал)\s+"
+            r"(?:[А-ЯЁA-Z][А-Яа-яЁёA-Za-z0-9.\-]*|\d+)"
+            r"(?:\s+(?:[А-ЯЁA-Z][А-Яа-яЁёA-Za-z0-9.\-]*|\d+)){0,3}",
+            re.I,
+        ),
+        re.compile(
+            r"\b(?:школа|поликлиника|больница|парк|сквер|мост|вокзал|"
+            r"станция метро|детский сад)\s+"
+            r"(?:[А-ЯЁA-Z0-9][А-Яа-яЁёA-Za-z0-9.\-\"()]*)"
+            r"(?:\s+(?:[А-ЯЁA-Z0-9][А-Яа-яЁёA-Za-z0-9.\-\"()]*)){0,4}",
+            re.I,
+        ),
     )
 
     def __init__(self, normalizer: AddressNormalizer | None = None) -> None:
@@ -47,14 +74,16 @@ class RuleBasedMentionExtractor:
 
     @property
     def identity(self) -> Mapping[str, Any]:
-        return {"type": "rules", "version": "1"}
+        return {"type": "rules", "version": "2"}
 
     def extract(self, text: str) -> AddressMention | None:
         if is_missing(text):
             return None
-        match = self._pattern.search(text)
-        if not match:
+        matches = [pattern.search(text) for pattern in self._patterns]
+        candidates = [match for match in matches if match is not None]
+        if not candidates:
             return None
+        match = min(candidates, key=lambda item: (item.start(), -len(item.group(0))))
         return self._normalizer.normalize(
             match.group(0),
             confidence=0.58,
@@ -124,7 +153,7 @@ class LocalFlairAddressExtractor:
         from flair.data import Sentence
 
         model = self._manager.get(
-            f"flair:{self._path}:{self._revision}",
+            f"flair:{self._path}:{self._revision}:{self._weights_sha256}",
             self._load,
         )
         sentence = Sentence(text)
