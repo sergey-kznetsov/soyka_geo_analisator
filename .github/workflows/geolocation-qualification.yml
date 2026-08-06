@@ -6,12 +6,15 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/geolocation-qualification.yml"
+      - "evidence/geolocation/**"
       - "models/geolocation_*.json"
       - "poetry.lock"
-      - "pyproject.toml"
       - "pymorphy2/**"
+      - "scripts/verify_geolocation_evidence.py"
       - "soika_uds/geolocation/**"
+      - "tests/unit/test_geolocation_production_registry_stage9.py"
       - "tests/unit/test_geolocation_qualification_stage9.py"
+      - "tests/unit/test_qualification_evidence_stage10.py"
 
 concurrency:
   group: geolocation-qualification-${{ github.event.pull_request.number || github.ref }}
@@ -27,13 +30,41 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11.15"
           cache: pip
 
+      - name: Determine qualification mode
+        id: mode
+        shell: bash
+        run: |
+          if test "${{ github.event_name }}" = "workflow_dispatch"; then
+            live=true
+          else
+            git diff --name-only \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" > changed-files.txt
+            cat changed-files.txt
+            if grep --extended-regexp --quiet \
+              '^(evidence/geolocation/|models/geolocation_.*\.json$|poetry\.lock$|pymorphy2/|soika_uds/geolocation/|tests/unit/test_geolocation_(production_registry|qualification)_stage9\.py$)' \
+              changed-files.txt; then
+              live=true
+            else
+              live=false
+            fi
+          fi
+          echo "live=$live" >> "$GITHUB_OUTPUT"
+          echo "live qualification: $live"
+
+      - name: Verify committed qualification evidence
+        run: python scripts/verify_geolocation_evidence.py
+
       - name: Restore policy-compliant response cache
+        if: steps.mode.outputs.live == 'true'
         uses: actions/cache@v4
         with:
           path: build/geolocation-cache.sqlite3*
@@ -42,6 +73,7 @@ jobs:
             hashFiles('models/geolocation_validation_v1.json') }}
 
       - name: Install locked qualification runtime
+        if: steps.mode.outputs.live == 'true'
         run: |
           python -m pip install --upgrade pip poetry==2.4.1
           poetry install --only main --no-root --no-interaction
@@ -66,6 +98,7 @@ jobs:
           PY
 
       - name: Run target-city qualification
+        if: steps.mode.outputs.live == 'true'
         id: qualification
         shell: bash
         run: |
@@ -77,7 +110,7 @@ jobs:
             --registry-output build/geolocation-production-registry.json \
             --predictions-output build/geolocation-predictions.json \
             --cache build/geolocation-cache.sqlite3 \
-            --user-agent "SOIKA-UDS-Geolocation-Qualification/0.14 (+https://github.com/sergey-kznetsov/soyka_geo_analisator)" \
+            --user-agent "SOIKA-UDS-Geolocation-Qualification/0.15 (+https://github.com/sergey-kznetsov/soyka_geo_analisator)" \
             --allow-network
           status=$?
           set -e
@@ -90,7 +123,7 @@ jobs:
           exit "$status"
 
       - name: Upload qualification evidence
-        if: always()
+        if: always() && steps.mode.outputs.live == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: geolocation-qualification-evidence
