@@ -1,5 +1,20 @@
 """Public package of SOIKA UDS Development."""
 
+from .classification import (
+    ClassificationBatchResult,
+    ClassificationConfig,
+    ClassificationEngine,
+    ClassificationRegistry,
+    ClassificationStageHandler,
+    ClassificationStats,
+    ConfidenceBand,
+    ExecutionDevice,
+    LabelPrediction,
+    MessageClassificationResult,
+    ModelDescriptor,
+    TransformersPredictionBackend,
+    load_classification_registry,
+)
 from .contracts import (
     AnalysisResult,
     CoverageSummary,
@@ -93,7 +108,7 @@ from .preprocessing import (
     source_message_to_dict,
 )
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
@@ -108,9 +123,16 @@ __all__ = [
     "AuthorPseudonymizer",
     "CallableStageHandler",
     "CheckpointState",
+    "ClassificationBatchResult",
+    "ClassificationConfig",
+    "ClassificationEngine",
+    "ClassificationRegistry",
+    "ClassificationStageHandler",
+    "ClassificationStats",
     "ComplianceContext",
     "ComplianceGate",
     "ConcurrentUpdateError",
+    "ConfidenceBand",
     "ContractIssue",
     "ContractValidationError",
     "ContractVersion",
@@ -119,6 +141,7 @@ __all__ = [
     "DataProtectionPolicy",
     "DuplicateDecision",
     "DuplicateKind",
+    "ExecutionDevice",
     "FileJobStore",
     "FileParserCheckpointStore",
     "IdempotencyConflictError",
@@ -129,11 +152,14 @@ __all__ = [
     "JobRecord",
     "JobStatus",
     "JobStatusV1",
+    "LabelPrediction",
     "LanguageResult",
     "MessageClassification",
+    "MessageClassificationResult",
     "MessageDecision",
     "MessageType",
     "MissingStageHandlerError",
+    "ModelDescriptor",
     "ModelResult",
     "OrchestrationError",
     "OrchestrationStoreError",
@@ -169,11 +195,13 @@ __all__ = [
     "StageResult",
     "TerritoryContext",
     "TransformationTrace",
+    "TransformersPredictionBackend",
     "assert_idempotent_request",
     "canonicalize_url",
     "contract_info",
     "detect_language",
     "export_schema_bundle",
+    "load_classification_registry",
     "parse_contract_document",
     "preprocess_messages",
     "schema_bundle_digest",
