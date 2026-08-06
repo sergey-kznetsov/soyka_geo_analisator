@@ -17,6 +17,8 @@ from .models import (
     StageCheckpoint,
     StageExecutionError,
     StageResult,
+    stage_job_status,
+    stage_progress,
 )
 from .orchestrator import (
     CallableStageHandler,
@@ -50,4 +52,6 @@ __all__ = [
     "StageExecutionError",
     "StageHandler",
     "StageResult",
+    "stage_job_status",
+    "stage_progress",
 ]
