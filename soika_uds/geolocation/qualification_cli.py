@@ -153,6 +153,13 @@ def main(argv: list[str] | None = None) -> int:
             "model_smoke_passed": model_smoke,
             "validation_digest": validation.digest,
             "prediction_digest": digest_json(prediction_payload),
+            "runtime_config": {
+                "min_confidence": args.min_confidence,
+                "max_candidates": args.max_candidates,
+                "country_codes": ["ru"],
+                "language": "ru",
+                "ranking": "semantic-v1",
+            },
             "runtime_provenance": runtime_provenance,
         }
     )
