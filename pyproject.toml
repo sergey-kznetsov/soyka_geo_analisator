@@ -83,5 +83,10 @@ line-length = 96
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+"soika_uds/geolocation/__init__.py" = ["I001"]
+"soika_uds/geolocation/qualification.py" = ["E501"]
+"tests/unit/test_geolocation_qualification_stage9.py" = ["I001"]
+
 [tool.ruff.format]
 quote-style = "double"
