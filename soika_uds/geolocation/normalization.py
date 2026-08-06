@@ -12,9 +12,14 @@ from .models import AddressMention, LocationKind, MentionSource
 
 _BRACKETS = re.compile(r"\[[^\]]*\]")
 _SPACE = re.compile(r"\s+")
-_HOUSE = re.compile(
-    r"(?<!\w)(?:д(?:ом)?\.?\s*)?(\d+[а-яa-z]?)"
-    r"(?:\s*(?:к|корп(?:ус)?\.?)\s*(\d+[а-яa-z]?))?",
+_HOUSE_NUMBER = r"(\d+[а-яa-z]?)"
+_CORPUS_NUMBER = r"(?:\s*(?:к|корп(?:ус)?\.?)\s*(\d+[а-яa-z]?))?"
+_EXPLICIT_HOUSE = re.compile(
+    rf"(?<!\w)(?:д(?:ом)?\.?)\s*{_HOUSE_NUMBER}{_CORPUS_NUMBER}",
+    re.I,
+)
+_TRAILING_HOUSE = re.compile(
+    rf"(?:,\s*|\s+){_HOUSE_NUMBER}{_CORPUS_NUMBER}\s*$",
     re.I,
 )
 _INTERSECTION = re.compile(r"\s+(?:и|/|\\|пересечени[ея]|угол)\s+", re.I)
@@ -54,6 +59,19 @@ def clean_text(value: str) -> str:
     normalized = _BRACKETS.sub(" ", normalized)
     normalized = normalized.replace("ё", "е").replace("Ё", "Е")
     return _SPACE.sub(" ", normalized).strip(" ,.;:")
+
+
+def _house_value(match: re.Match[str] | None) -> str | None:
+    if match is None:
+        return None
+    value = match.group(1)
+    if match.group(2):
+        value += f"к{match.group(2)}"
+    return value
+
+
+def _without_match(value: str, match: re.Match[str]) -> str:
+    return f"{value[: match.start()]} {value[match.end() :]}".strip(" ,")
 
 
 class AddressNormalizer:
@@ -103,14 +121,15 @@ class AddressNormalizer:
         if not original:
             raise ValueError("address mention is empty after normalization")
         intersection = _INTERSECTION.split(original, maxsplit=1)
-        house_match = _HOUSE.search(original)
-        house_number = None
-        if house_match:
-            house_number = house_match.group(1)
-            if house_match.group(2):
-                house_number += f"к{house_match.group(2)}"
         district = original if _DISTRICT.search(original) else None
         poi = original if _POI.search(original) else None
+        house_match: re.Match[str] | None = None
+        if len(intersection) != 2 and district is None and poi is None:
+            house_match = _EXPLICIT_HOUSE.search(original)
+            if house_match is None:
+                house_match = _TRAILING_HOUSE.search(original)
+        house_number = _house_value(house_match)
+
         if len(intersection) == 2:
             kind = LocationKind.INTERSECTION
             street = _STREET_PREFIX.sub("", intersection[0]).strip(" ,")
@@ -127,9 +146,10 @@ class AddressNormalizer:
             )
             street = None
             secondary_street = None
-        elif house_number:
+        elif house_match is not None:
             kind = LocationKind.HOUSE
-            street = _HOUSE.sub("", original).strip(" ,")
+            street_text = _without_match(original, house_match)
+            street = _STREET_PREFIX.sub("", street_text).strip(" ,")
             secondary_street = None
         elif _STREET_PREFIX.search(original):
             kind = LocationKind.STREET
@@ -139,18 +159,21 @@ class AddressNormalizer:
             kind = LocationKind.UNKNOWN
             street = original
             secondary_street = None
-        normalized_parts = [
-            part
-            for part in (
-                self._lemma(street) if street else None,
-                house_number,
-                self._lemma(secondary_street) if secondary_street else None,
-                self._lemma(poi) if poi else None,
-                self._lemma(district) if district else None,
-            )
-            if part
-        ]
-        normalized = ", ".join(normalized_parts) or self._lemma(original)
+
+        if kind is LocationKind.INTERSECTION:
+            normalized_parts = [
+                self._lemma(street),
+                self._lemma(secondary_street),
+            ]
+        elif kind is LocationKind.HOUSE:
+            normalized_parts = [self._lemma(street), house_number]
+        elif kind is LocationKind.DISTRICT:
+            normalized_parts = [self._lemma(district)]
+        elif kind in {LocationKind.POI, LocationKind.LANDMARK}:
+            normalized_parts = [self._lemma(poi)]
+        else:
+            normalized_parts = [self._lemma(street)]
+        normalized = ", ".join(part for part in normalized_parts if part)
         return AddressMention(
             text=original,
             normalized=normalized,
