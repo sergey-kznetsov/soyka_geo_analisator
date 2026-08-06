@@ -39,9 +39,7 @@ def spatial_index_plan(
     exact_column = _identifier(exact_column, "exact_column")
     polygon_name = f"idx_{table}_{geometry_column}_exact_gist"
     radius_name = f"idx_{table}_{geometry_column}_exact_geography_gist"
-    exact_predicate = (
-        f"WHERE {geometry_column} IS NOT NULL AND {exact_column}"
-    )
+    exact_predicate = f"WHERE {geometry_column} IS NOT NULL AND {exact_column}"
     return (
         PostGISIndexSpec(
             name=polygon_name,
@@ -66,14 +64,18 @@ def spatial_index_plan(
 def spatial_query_plan(
     *,
     geometry_column: str = "geom",
+    exact_column: str = "has_exact_geometry",
 ) -> PostGISQueryPlan:
     geometry_column = _identifier(geometry_column, "geometry_column")
+    exact_column = _identifier(exact_column, "exact_column")
+    eligibility = f"{geometry_column} IS NOT NULL AND {exact_column}"
     return PostGISQueryPlan(
         radius_predicate=(
-            f"ST_DWithin({geometry_column}::geography, "
+            f"{eligibility} AND ST_DWithin({geometry_column}::geography, "
             "ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, %s)"
         ),
         polygon_predicate=(
+            f"{eligibility} AND "
             "ST_Covers(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326), "
             f"{geometry_column})"
         ),
