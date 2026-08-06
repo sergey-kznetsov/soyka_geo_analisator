@@ -29,16 +29,24 @@ from .engine import SoikaEngine
 from .geolocation import ALGORITHM_VERSION as GEOLOCATION_ALGORITHM_VERSION
 from .geolocation import (
     AddressMention,
+    GateResult,
+    GateState,
     GeocodingCandidate,
     GeolocationConfig,
     GeolocationEngine,
+    GeolocationModelAudit,
+    GeolocationQualificationReport,
     GeolocationStageHandler,
+    GeolocationThresholds,
+    GeolocationValidationManifest,
     GeoPoint,
     LocationKind,
     MessageGeolocationResult,
     NominatimClient,
     OverpassClient,
     SQLiteResponseCache,
+    load_qualified_registry,
+    qualify_geolocation,
 )
 from .integration import (
     CURRENT_CONTRACT_VERSION,
@@ -122,7 +130,7 @@ from .preprocessing import (
     source_message_to_dict,
 )
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
@@ -160,10 +168,16 @@ __all__ = [
     "ExecutionDevice",
     "FileJobStore",
     "FileParserCheckpointStore",
+    "GateResult",
+    "GateState",
     "GeocodingCandidate",
     "GeolocationConfig",
     "GeolocationEngine",
+    "GeolocationModelAudit",
+    "GeolocationQualificationReport",
     "GeolocationStageHandler",
+    "GeolocationThresholds",
+    "GeolocationValidationManifest",
     "GeoPoint",
     "IdempotencyConflictError",
     "InMemoryJobStore",
@@ -228,8 +242,10 @@ __all__ = [
     "detect_language",
     "export_schema_bundle",
     "load_classification_registry",
+    "load_qualified_registry",
     "parse_contract_document",
     "preprocess_messages",
+    "qualify_geolocation",
     "schema_bundle_digest",
     "source_message_from_dict",
     "source_message_to_dict",

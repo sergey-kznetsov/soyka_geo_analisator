@@ -1,0 +1,21 @@
+{
+  "artifact_kind": "pypi-wheel",
+  "artifact_sha256": "e12b130d05a0b4d2eb6442092ed5b5769a68a311c17f2095b1aa739fb8d6dc78",
+  "component_id": "natasha/natasha",
+  "component_version": "1.6.0",
+  "evidence_urls": [
+    "https://github.com/natasha/natasha",
+    "https://pypi.org/project/natasha/1.6.0/",
+    "https://natasha.github.io/ner/"
+  ],
+  "intended_use_documented": true,
+  "license_id": "MIT",
+  "license_reviewed": true,
+  "limitations": [
+    "Natasha LOC extraction is optimized for Russian news text rather than arbitrary postal-address strings.",
+    "SOIKA rules-v2 is the precision-first primary extractor for explicit addresses; Natasha is a fallback.",
+    "Only object levels listed in the qualified validation manifest may be treated as production-approved."
+  ],
+  "training_data_documented": true,
+  "training_data_reviewed": true
+}

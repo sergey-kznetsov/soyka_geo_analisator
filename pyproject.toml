@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "soika-uds-development"
-version = "0.13.0"
+version = "0.14.0"
 description = "Server-side urban comment analysis module for the Geo Analyzer ecosystem"
 authors = [
     "SOIKA upstream contributors",
@@ -66,6 +66,7 @@ autodocsumm = "0.2.11"
 [tool.poetry.scripts]
 soika-uds = "soika_uds.cli:main"
 soika-classification-qualify = "soika_uds.classification.qualification_cli:main"
+soika-geolocation-qualify = "soika_uds.geolocation.qualification_cli:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -81,6 +82,11 @@ line-length = 96
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"soika_uds/geolocation/__init__.py" = ["I001"]
+"soika_uds/geolocation/qualification.py" = ["E501"]
+"tests/unit/test_geolocation_qualification_stage9.py" = ["I001"]
 
 [tool.ruff.format]
 quote-style = "double"

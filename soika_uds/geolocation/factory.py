@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .cache import SQLiteResponseCache
-from .providers import NominatimClient
+from .semantic_provider import SemanticNominatimClient
 from .transport import HttpRetryPolicy, RateLimiter, RequestsJsonTransport
 
 
@@ -12,7 +12,7 @@ def public_nominatim_client(
     *,
     user_agent: str,
     policy: HttpRetryPolicy | None = None,
-) -> NominatimClient:
+) -> SemanticNominatimClient:
     """Construct a public Nominatim client limited to one request per second."""
 
     transport = RequestsJsonTransport(
@@ -20,4 +20,4 @@ def public_nominatim_client(
         policy=policy,
         rate_limiter=RateLimiter(1.0),
     )
-    return NominatimClient(transport, cache)
+    return SemanticNominatimClient(transport, cache)
