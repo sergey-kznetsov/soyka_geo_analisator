@@ -40,7 +40,7 @@ def _candidate_id(
     osm_id: object,
     label: str,
 ) -> str:
-    value = f"{source}:{osm_type}:{osm_id}:{label}".encode("utf-8")
+    value = f"{source}:{osm_type}:{osm_id}:{label}".encode()
     return hashlib.sha256(value).hexdigest()[:24]
 
 
