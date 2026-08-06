@@ -55,7 +55,8 @@ def _eligible(message: Mapping[str, Any], config: ClassificationConfig) -> bool:
     duplicate = message.get("duplicate", {})
     if not isinstance(duplicate, Mapping):
         return False
-    if not duplicate.get("included_for_analysis", False) and not config.include_duplicates:
+    excluded_duplicate = not duplicate.get("included_for_analysis", False)
+    if excluded_duplicate and not config.include_duplicates:
         return False
     return bool(str(message.get("model_text", "")).strip())
 
