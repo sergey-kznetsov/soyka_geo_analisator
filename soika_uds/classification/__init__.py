@@ -34,9 +34,11 @@ from .qualification import (
     QualificationReport,
     QualityEvidence,
     ValidationSetEvidence,
+    qualify_release,
+)
+from .qualification_loader import (
     load_qualification_input,
     qualification_input_from_dict,
-    qualify_release,
 )
 from .registry import ClassificationRegistry, load_classification_registry
 from .runtime import ClassificationEngine, PredictionBackend
