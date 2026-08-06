@@ -21,7 +21,7 @@ from .extraction import (
 from .factory import public_nominatim_client
 from .model_manager import LazyModelManager
 from .models import GeolocationConfig, MessageGeolocationResult, digest_json
-from .qualification import (
+from .qualification_api import (
     extraction_exact_rate,
     load_model_audit,
     load_validation_manifest,
@@ -39,6 +39,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--validation", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--registry-output", required=True, type=Path)
+    parser.add_argument("--predictions-output", required=True, type=Path)
     parser.add_argument("--cache", required=True, type=Path)
     parser.add_argument("--user-agent", required=True)
     parser.add_argument("--allow-network", action="store_true")
@@ -47,7 +48,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
+def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -129,6 +130,11 @@ def main(argv: list[str] | None = None) -> int:
         min_confidence=args.min_confidence,
         max_candidates=args.max_candidates,
     )
+    prediction_payload = [
+        item.to_dict()
+        for item in sorted(predictions, key=lambda result: result.message_key)
+    ]
+    _write_json(args.predictions_output, prediction_payload)
     expected = tuple(
         EvaluationCase(
             message_key=case.message_key,
@@ -146,9 +152,7 @@ def main(argv: list[str] | None = None) -> int:
             "low_confidence_rate": low_confidence_rate(predictions),
             "model_smoke_passed": model_smoke,
             "validation_digest": validation.digest,
-            "prediction_digest": digest_json(
-                [item.to_dict() for item in sorted(predictions, key=lambda item: item.message_key)]
-            ),
+            "prediction_digest": digest_json(prediction_payload),
             "runtime_provenance": runtime_provenance,
         }
     )
