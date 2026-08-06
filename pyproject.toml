@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "soika-uds-development"
-version = "0.11.0"
+version = "0.12.0"
 description = "Server-side urban comment analysis module for the Geo Analyzer ecosystem"
 authors = [
     "SOIKA upstream contributors",
@@ -65,6 +65,7 @@ autodocsumm = "0.2.11"
 
 [tool.poetry.scripts]
 soika-uds = "soika_uds.cli:main"
+soika-classification-qualify = "soika_uds.classification.qualification_cli:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
