@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 
 import pytest
+from pyproj import Geod
 
 from soika_uds.contracts import TerritoryContext
 from soika_uds.geolocation import GeoPoint
-from soika_uds.geolocation.crs import metric_distance_m
 from soika_uds.spatial_filtering import (
     SpatialDecision,
     SpatialFilterConfig,
@@ -15,6 +15,8 @@ from soika_uds.spatial_filtering import (
     TerritoryMode,
     build_spatial_target,
 )
+
+_WGS84_GEOD = Geod(ellps="WGS84")
 
 
 def _result(
@@ -59,10 +61,20 @@ def _polygon() -> dict:
     }
 
 
+def _geodesic_distance(first: GeoPoint, second: GeoPoint) -> float:
+    _forward, _back, distance = _WGS84_GEOD.inv(
+        first.longitude,
+        first.latitude,
+        second.longitude,
+        second.latitude,
+    )
+    return abs(float(distance))
+
+
 def test_radius_includes_boundary_and_excludes_outside() -> None:
     center = GeoPoint(49.1221, 55.7887)
     boundary = GeoPoint(49.1231, 55.7887)
-    radius = metric_distance_m(center, boundary)
+    radius = _geodesic_distance(center, boundary)
     territory = TerritoryContext(
         analysis_id="stage10-radius",
         city="Казань",
@@ -92,6 +104,39 @@ def test_radius_includes_boundary_and_excludes_outside() -> None:
         "indeterminate": 0,
         "skipped": 0,
     }
+
+
+@pytest.mark.parametrize(
+    ("longitude", "latitude"),
+    ((179.9995, 0.0), (20.0, 85.0)),
+)
+def test_radius_is_geodesic_across_antimeridian_and_near_poles(
+    longitude: float,
+    latitude: float,
+) -> None:
+    point_longitude, point_latitude, _back = _WGS84_GEOD.fwd(
+        longitude,
+        latitude,
+        90.0,
+        100.0,
+    )
+    territory = TerritoryContext(
+        analysis_id=f"stage10-global-radius-{latitude}",
+        city="global-test",
+        latitude=latitude,
+        longitude=longitude,
+        radius_meters=200.0,
+    )
+
+    batch = SpatialFilterEngine().filter(
+        (_result("nearby", point_longitude, point_latitude),),
+        territory=territory,
+    )
+
+    result = batch.results[0]
+    assert result.decision is SpatialDecision.INCLUDED
+    assert result.distance_m == pytest.approx(100.0, abs=0.01)
+    assert result.provenance["radius_distance_method"] == "WGS84-geodesic"
 
 
 def test_polygon_covers_boundary_and_respects_holes() -> None:
