@@ -112,7 +112,12 @@ class SpatialFilterEngine:
             target.geometry_metric.covers(projected)
             or boundary_distance <= self.config.boundary_epsilon_m
         ):
-            return True, SpatialRelation.BOUNDARY, boundary_distance, "polygon_boundary_included"
+            return (
+                True,
+                SpatialRelation.BOUNDARY,
+                boundary_distance,
+                "polygon_boundary_included",
+            )
         return False, SpatialRelation.OUTSIDE, boundary_distance, "outside_polygon"
 
     def _evaluate_item(
