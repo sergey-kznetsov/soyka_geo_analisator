@@ -1,0 +1,64 @@
+name: stage8b-lint-fix
+
+on:
+  push:
+    branches:
+      - agent/stage8b-model-qualification
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/stage8b-model-qualification
+      - name: Apply confirmed Ruff fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          qualification = Path("soika_uds/classification/qualification.py")
+          text = qualification.read_text(encoding="utf-8")
+          replacements = {
+              "from dataclasses import dataclass, field\n": "from dataclasses import dataclass\n",
+              "        sample_match = validation is not None and quality.samples == validation.sample_count\n": (
+                  "        sample_match = (\n"
+                  "            validation is not None\n"
+                  "            and quality.samples == validation.sample_count\n"
+                  "        )\n"
+              ),
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f"unexpected qualification pattern: {old!r}")
+              text = text.replace(old, new)
+          qualification.write_text(text, encoding="utf-8")
+
+          tests = Path("tests/unit/test_classification_qualification.py")
+          text = tests.read_text(encoding="utf-8")
+          old = (
+              "def benchmark(device: ExecutionDevice, *, output_digest: str = SHA) -> BenchmarkEvidence:\n"
+          )
+          new = (
+              "def benchmark(\n"
+              "    device: ExecutionDevice,\n"
+              "    *,\n"
+              "    output_digest: str = SHA,\n"
+              ") -> BenchmarkEvidence:\n"
+          )
+          if text.count(old) != 1:
+              raise SystemExit("unexpected benchmark signature")
+          tests.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+      - name: Remove temporary workflow
+        run: rm .github/workflows/stage8b-lint-fix.yml
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add soika_uds/classification/qualification.py tests/unit/test_classification_qualification.py .github/workflows/stage8b-lint-fix.yml
+          git commit -m "Fix stage 8B lint findings"
+          git push origin HEAD:agent/stage8b-model-qualification
