@@ -79,6 +79,18 @@ def _nominatim_confidence(
     )
 
 
+def _nominatim_payload(value: Any) -> list[Any]:
+    if not isinstance(value, list):
+        raise ValueError("Nominatim response must be an array")
+    return value
+
+
+def _overpass_payload(value: Any) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping) or not isinstance(value.get("elements"), list):
+        raise ValueError("Overpass response must contain elements")
+    return value
+
+
 class NominatimClient:
     def __init__(
         self,
@@ -137,16 +149,17 @@ class NominatimClient:
         else:
             params["layer"] = "address,poi"
         cache_key = self._cache.key("nominatim.search", params)
-        payload = self._cache.get(cache_key)
-        if payload is None:
-            payload = self._transport.request_json(
+        cached = self._cache.get(cache_key)
+        if cached is None:
+            fresh = self._transport.request_json(
                 "GET",
                 f"{self._base_url}/search",
                 params=params,
             )
+            payload = _nominatim_payload(fresh)
             self._cache.set(cache_key, payload, ttl_seconds=self._ttl)
-        if not isinstance(payload, list):
-            raise ValueError("Nominatim response must be an array")
+        else:
+            payload = _nominatim_payload(cached)
         candidates: list[GeocodingCandidate] = []
         for rank, raw in enumerate(payload[:limit]):
             if not isinstance(raw, Mapping):
@@ -248,23 +261,21 @@ class OverpassClient:
         query = (
             f"[out:json][timeout:{self._timeout}];"
             f"nwr[\"name\"~\"^{name}$\",i](around:{radius_m},"
-            f"{center.latitude},{center.longitude});out center tags {limit};"
+            f"{center.latitude},{center.longitude});out tags center {limit};"
         )
         parameters = {"data": query}
         cache_key = self._cache.key("overpass.nearby", parameters)
-        payload = self._cache.get(cache_key)
-        if payload is None:
-            payload = self._transport.request_json(
+        cached = self._cache.get(cache_key)
+        if cached is None:
+            fresh = self._transport.request_json(
                 "POST",
                 self._base_url,
                 data=parameters,
             )
+            payload = _overpass_payload(fresh)
             self._cache.set(cache_key, payload, ttl_seconds=self._ttl)
-        if not isinstance(payload, Mapping) or not isinstance(
-            payload.get("elements"),
-            list,
-        ):
-            raise ValueError("Overpass response must contain elements")
+        else:
+            payload = _overpass_payload(cached)
         candidates: list[GeocodingCandidate] = []
         for raw in payload["elements"][:limit]:
             if not isinstance(raw, Mapping):
