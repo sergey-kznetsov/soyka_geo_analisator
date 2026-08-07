@@ -233,6 +233,11 @@ def test_public_message_point_keys_are_validated() -> None:
         RiskScoringEngine().score((event,), {1: _points("m1")["m1"]})
 
 
+def test_public_event_values_are_validated_before_sorting() -> None:
+    with pytest.raises(TypeError, match="EventCluster"):
+        RiskScoringEngine().score(({"event_id": "not-an-event"},), {})
+
+
 def test_empty_events_are_supported() -> None:
     result = RiskScoringEngine().score((), {})
 
