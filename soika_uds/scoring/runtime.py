@@ -179,6 +179,19 @@ def _normalized(value: float, reference: float) -> float:
     return min(1.0, value / reference)
 
 
+def _effective_weights(config: RiskScoringConfig) -> dict[str, float]:
+    raw = [config.indicator_weights[name] for name in INDICATOR_NAMES]
+    total = sum(raw)
+    result: dict[str, float] = {}
+    allocated = 0.0
+    for name, value in zip(INDICATOR_NAMES[:-1], raw[:-1], strict=True):
+        weight = value / total
+        result[name] = weight
+        allocated += weight
+    result[INDICATOR_NAMES[-1]] = max(0.0, min(1.0, 1.0 - allocated))
+    return result
+
+
 def _band(score: float, config: RiskScoringConfig) -> RiskBand:
     if score >= config.critical_threshold:
         return RiskBand.CRITICAL
@@ -326,6 +339,7 @@ class RiskScoringEngine:
             "connectivity": self.config.connectivity_reference_messages,
             "spatial_spread": self.config.spatial_spread_reference_m,
         }
+        effective_weights = _effective_weights(self.config)
         missing_reasons = {
             "persistence": "event_time_bounds_unavailable",
             "spatial_spread": "member_message_geometry_unavailable",
@@ -333,7 +347,7 @@ class RiskScoringEngine:
         indicators: list[IndicatorScore] = []
         for name in INDICATOR_NAMES:
             raw = raw_values[name]
-            weight = self.config.indicator_weights[name]
+            weight = effective_weights[name]
             reference = references[name]
             if raw is None:
                 indicators.append(
@@ -363,11 +377,7 @@ class RiskScoringEngine:
                 )
             )
         complete = all(item.status is IndicatorStatus.OBSERVED for item in indicators)
-        score = (
-            min(1.0, sum(item.contribution or 0.0 for item in indicators))
-            if complete
-            else None
-        )
+        score = sum(item.contribution or 0.0 for item in indicators) if complete else None
         band = _band(score, self.config) if score is not None else RiskBand.UNAVAILABLE
         return EventRiskScore(
             event_id=event.event_id,
@@ -379,7 +389,7 @@ class RiskScoringEngine:
             explanation={
                 "formula": "sum(weight_i * normalized_indicator_i)",
                 "normalization": "min(1, raw_value / fixed_reference)",
-                "score_bounds": "aggregate_clamped_to_unit_interval",
+                "weight_policy": "normalize_tolerance_accepted_weights_to_unit_sum",
                 "missing_data_policy": "score_unavailable_not_zero",
                 "nested_event_policy": "connectivity_counts_unique_external_message_ids",
                 "connection_count": len(neighbor_ids),
@@ -464,7 +474,7 @@ class RiskScoringEngine:
             "event_metric_crs": metric_crs_by_event,
             "dataset_relative_minmax": False,
             "zero_range_policy": "fixed_positive_references_remove_zero_range_division",
-            "score_bounds_policy": "aggregate_clamped_to_unit_interval",
+            "weight_policy": "normalize_tolerance_accepted_weights_to_unit_sum",
             "decision_use_approved": decision_use_approved,
         }
         output_core = {
