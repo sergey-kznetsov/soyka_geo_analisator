@@ -79,9 +79,26 @@ jobs:
           poetry install --only main --no-root --no-interaction
           mkdir -p build/wheels
           poetry run python -m pip download --no-deps natasha==1.6.0 --dest build/wheels
+          poetry run python -m pip download \
+            --no-deps \
+            --only-binary=:all: \
+            dawg2-python==0.9.0 \
+            --dest build/wheels
           echo "e12b130d05a0b4d2eb6442092ed5b5769a68a311c17f2095b1aa739fb8d6dc78  build/wheels/natasha-1.6.0-py3-none-any.whl" | sha256sum --check
+          echo "4fab6fc097bd176cd783cd8421b757348ea5a460789e53b0f6bb64831380bab5  build/wheels/dawg2_python-0.9.0-py3-none-any.whl" | sha256sum --check
+
+          # pymorphy2 0.9.1 and pymorphy3 pull two distributions that both own
+          # the dawg_python package. Remove the mixed namespace and restore the
+          # maintained implementation used by pymorphy3. The repository-local
+          # pymorphy2 bridge delegates legacy imports to pymorphy3.
+          poetry run python -m pip uninstall -y dawg-python dawg2-python
+          poetry run python -m pip install \
+            --no-deps \
+            build/wheels/dawg2_python-0.9.0-py3-none-any.whl
+
           poetry run python - <<'PY'
           import importlib.metadata
+
           expected = {
               "natasha": "1.6.0",
               "navec": "0.10.0",
@@ -89,12 +106,25 @@ jobs:
               "slovnet": "0.6.0",
               "yargy": "0.16.0",
               "pymorphy3": "2.0.6",
+              "dawg2-python": "0.9.0",
               "requests": "2.31.0",
           }
           actual = {name: importlib.metadata.version(name) for name in expected}
           if actual != expected:
               raise SystemExit(f"locked qualification versions differ: {actual}")
+          try:
+              importlib.metadata.version("dawg-python")
+          except importlib.metadata.PackageNotFoundError:
+              pass
+          else:
+              raise SystemExit("legacy dawg-python must not remain in qualification runtime")
+
+          from pymorphy3 import MorphAnalyzer
+          import natasha
+
+          MorphAnalyzer()
           print(actual)
+          print(f"natasha={natasha.__version__ if hasattr(natasha, '__version__') else '1.6.0'}")
           PY
 
       - name: Run target-city qualification
