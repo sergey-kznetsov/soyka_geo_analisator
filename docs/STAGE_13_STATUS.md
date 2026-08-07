@@ -38,6 +38,8 @@ Runner:
 - повторное применение неизменённого scope является no-op;
 - не принимает migration из чужого scope.
 
+CLI всегда автоматически включает `platform` и выполняет его до dependent scopes, независимо от порядка пользовательских `--scope`; повторяющиеся scopes дедуплицируются.
+
 `discover_migrations(scope, package=...)` позволяет будущей серверной программе хранить свой migration scope в собственном Python package.
 
 ## Canonical state и история
@@ -55,6 +57,12 @@ Runner:
 Каждый завершённый stage output дополнительно записывается как immutable `ga_core.artifacts` с SHA-256. Идентичный повторный output не создаёт дубликат, а изменившийся output сохраняет отдельную историческую версию.
 
 `PostgresArtifactStore` также поддерживает независимые artifacts с исходным GeoJSON и PostGIS geometry. Исходный GeoJSON участвует в content digest и сохраняется отдельно от PostGIS-normalized geometry. Artifact content глубоко immutable после создания.
+
+## PostgreSQL pool
+
+`PostgresDatabase` создаёт pool лениво, но первый concurrent access сериализован отдельным lock. Double-check внутри critical section предотвращает создание и потерю второго `ConnectionPool`; `close()` также синхронизирует сброс ссылки.
+
+Concurrency regression искусственно задерживает первый `open()` и подтверждает, что два worker-потока получают один и тот же pool instance.
 
 ## Durable cache и критерий повторного запуска
 
@@ -117,6 +125,21 @@ Backup/restore baseline:
 
 Документация отдельно фиксирует off-host encrypted backups, периодический restore-test и возможность добавить WAL/PITR/HA на deployment layer без изменения application contracts.
 
+## Qualification compatibility
+
+Полный geolocation qualification runtime ранее устанавливал одновременно legacy `dawg-python` и `dawg2-python`, которые владеют одним namespace `dawg_python`. Qualification workflow теперь после locked Poetry install удаляет смешанный namespace, проверяет SHA-256 wheel `dawg2-python==0.9.0`, восстанавливает совместимую реализацию и выполняет smoke `MorphAnalyzer()`/Natasha перед target-city qualification.
+
+Это изменение относится только к qualification environment и не меняет production NLP-модели или evidence.
+
+## Automated review
+
+Закрыты два P2 замечания automated review:
+
+1. dependent migration scopes теперь не могут выполниться раньше `platform` даже при обратном порядке CLI arguments;
+2. concurrent first access больше не может создать два lazy PostgreSQL connection pools.
+
+Оба дефекта покрыты regression tests, review threads resolved.
+
 ## Проверенная среда
 
 Live storage gate подтвердил:
@@ -138,7 +161,7 @@ GitHub Actions подтвердил:
 
 - Python compilation — passed;
 - Ruff — passed;
-- 272 deterministic unit/regression tests — passed;
+- 274 deterministic unit/regression tests — passed;
 - 8 live PostgreSQL/PostGIS integration tests — passed;
 - `poetry.lock` consistency — passed;
 - geolocation qualification workflow — passed;
