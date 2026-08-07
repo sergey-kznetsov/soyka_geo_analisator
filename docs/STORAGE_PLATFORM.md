@@ -8,12 +8,12 @@
 
 Обязательный общий слой:
 
-- `ga_meta` — registry приложений и журнал schema migrations;
+- `ga_meta` — registry приложений и scoped schema migrations;
 - `ga_core` — jobs, stage checkpoints и immutable artifacts;
 - `ga_cache` — durable JSON cache с TTL;
 - `application_id` — обязательная граница изоляции данных разных серверных программ.
 
-Предметные данные приложения размещаются в собственной схеме `ga_<application>`. СОЙКА использует `ga_soika`. Новое приложение может использовать только общий слой или добавить собственные типизированные таблицы и PostGIS-индексы отдельной migration.
+Предметные данные приложения размещаются в собственной схеме `ga_<application>`. СОЙКА использует `ga_soika`. Новое приложение может использовать только общий слой или добавить собственные типизированные таблицы и PostGIS-индексы отдельным migration scope.
 
 Такой подход сохраняет независимые migrations, типы, foreign keys и spatial indexes. Универсальная JSON-таблица для всех доменов намеренно не используется.
 
@@ -27,13 +27,21 @@ Python-доступ реализован через Psycopg 3 и `psycopg_pool`.
 
 DSN передаётся через environment variable, по умолчанию `GEOANALYZER_DATABASE_DSN`.
 
-Пример административной проверки:
+Общий слой для любого приложения:
 
 ```bash
 export GEOANALYZER_DATABASE_DSN='postgresql://user@db/geoanalyzer'
-geoanalyzer-storage migrate
+geoanalyzer-storage migrate --scope platform
 geoanalyzer-storage check
 ```
+
+Для СОЙКИ применяются общий и предметный scopes:
+
+```bash
+geoanalyzer-storage migrate --scope platform --scope soika
+```
+
+Без `--scope` команда `migrate` применяет только `platform`. Поэтому подключение нового серверного приложения не создаёт `ga_soika` и не получает скрытой зависимости от домена СОЙКИ.
 
 Пароль не следует передавать аргументом процесса. В production используются secret manager, `PGPASSFILE` либо другой механизм передачи credentials вне command line. Для сетевого production-подключения требуется TLS и отдельные роли с минимальными правами.
 
@@ -51,20 +59,30 @@ docker compose -f docker-compose.storage.yml up -d
 
 Для PostgreSQL 18 volume монтируется в `/var/lib/postgresql`, а не в старый version-specific data path.
 
-## Migrations
+## Scoped migrations
 
-`MigrationRunner` обнаруживает встроенные SQL-файлы `NNNN_name.sql` и применяет их по возрастанию version.
+`MigrationRunner` работает внутри явного `scope`. Встроенные migrations размещаются как `sql/migrations/<scope>/NNNN_name.sql` и применяются по возрастанию version.
+
+В текущем пакете существуют два независимых scopes:
+
+- `platform` — только общий storage contract;
+- `soika` — только предметная схема СОЙКИ и её PostGIS indexes.
+
+Журнал `ga_meta.schema_migrations` имеет ключ `(scope, version)`. Версия `0001` в одном scope не конфликтует с `0001` другого приложения.
 
 Инварианты:
 
 - migration выполняется транзакционно;
 - параллельные migration runners сериализуются через PostgreSQL advisory transaction lock;
 - `lock_timeout` ограничивает зависание на конфликтующем lock;
-- SHA-256 каждой применённой migration записывается в `ga_meta.schema_migrations`;
+- SHA-256 каждой применённой migration записывается вместе со scope;
 - изменение уже применённой migration приводит к `MigrationChecksumError`;
-- повторное применение неизменённого набора migrations является no-op.
+- повторное применение неизменённого scope является no-op;
+- runner не принимает migration из чужого scope.
 
-После публикации migration считается immutable. Изменения выполняются новой migration.
+`discover_migrations(scope, package=...)` позволяет другому Python-сервису хранить свои SQL migrations в собственном package с тем же layout. То есть расширение экосистемы не требует добавлять доменный SQL каждого сервиса внутрь СОЙКИ.
+
+После публикации migration считается immutable. Изменения выполняются новой migration в том же scope.
 
 ## Application registry
 
@@ -72,7 +90,7 @@ docker compose -f docker-compose.storage.yml up -d
 
 `application_id` должен быть стабильным идентификатором программы. Общие jobs, artifacts и cache всегда включают его в primary/unique key. Поэтому одинаковые `analysis_id`, idempotency key или cache key разных приложений не пересекаются.
 
-`domain_schema` является метаданными; создание предметной схемы выполняется migration этого приложения.
+`domain_schema` является метаданными; создание предметной схемы выполняется migration scope самого приложения.
 
 ## Jobs и checkpoints
 
@@ -99,7 +117,9 @@ docker compose -f docker-compose.storage.yml up -d
 
 ## Immutable artifacts
 
-`PostgresArtifactStore` хранит произвольный версионированный JSON artifact и опциональный GeoJSON.
+`PostgresArtifactStore` хранит произвольный версионированный JSON artifact и опциональный GeoJSON geometry.
+
+Artifact глубоко замораживает вложенные mapping/sequence значения после валидации, поэтому content digest нельзя изменить мутацией исходного Python-объекта.
 
 Для GeoJSON сохраняются одновременно:
 
@@ -122,13 +142,13 @@ Round-trip проверяет сохранённый content digest. Это не
 
 OSM/Nominatim/Overpass adapters принимают `ResponseCache` protocol. Поэтому production может использовать `PostgresJsonCache`, а локальные тесты — прежний `SQLiteResponseCache`.
 
-Live integration test подтверждает критерий повторного запуска: два одинаковых Nominatim lookup через разные вызовы provider выполняют HTTP transport только один раз; второй ответ читается из PostgreSQL-cache.
+Live integration test подтверждает критерий повторного запуска: два одинаковых Nominatim lookup выполняют HTTP transport только один раз; второй ответ читается из PostgreSQL-cache. Таким образом неизменившийся OSM lookup не скачивается повторно.
 
 Redis не является обязательной зависимостью. Если позже понадобится L1 cache с меньшей latency, Redis можно поставить перед PostgreSQL, сохранив тот же deterministic cache contract и PostgreSQL как durable L2/source of truth.
 
 ## СОЙКА: предметная схема
 
-`ga_soika` содержит типизированные таблицы для предметных запросов:
+`soika` migration scope создаёт `ga_soika` с типизированными таблицами для предметных запросов:
 
 - `model_versions`;
 - `source_messages`;
@@ -167,7 +187,7 @@ Default technical policy:
 - backup — `pg_dump --format=custom --no-owner --no-acl`;
 - restore — `pg_restore --clean --if-exists --no-owner --no-acl --exit-on-error`.
 
-Пароль намеренно отсутствует в command builder. Backup job должен получать credentials через secret infrastructure/`PGPASSFILE`.
+Команды возвращаются как argv, а не shell-строка; host допускает стандартные PostgreSQL endpoint формы, включая IPv6. Пароль намеренно отсутствует в command builder. Backup job должен получать credentials через secret infrastructure/`PGPASSFILE`.
 
 Production strategy:
 
@@ -185,18 +205,18 @@ Production strategy:
 Минимальный путь:
 
 1. выбрать стабильный lowercase `application_id`;
-2. применить общие migrations;
+2. применить `platform` scope;
 3. зарегистрировать приложение через `PostgresApplicationRegistry`;
 4. использовать `PostgresJsonCache` для durable cache;
 5. использовать `PostgresArtifactStore` для immutable outputs;
-6. при наличии pipeline реализовать/использовать job-store contract;
-7. при необходимости добавить собственную `ga_<application>` schema отдельной migration;
+6. при наличии pipeline реализовать/использовать совместимый job-store contract;
+7. при необходимости добавить собственную `ga_<application>` schema в отдельном migration package/scope;
 8. добавить live integration tests на PostgreSQL/PostGIS для новых spatial/index invariants.
 
 Не следует менять общий `search_path` между приложениями. SQL общего слоя использует fully-qualified schema names, что уменьшает риск случайного обращения к объектам другого сервиса.
 
 ## Граница stage 13
 
-Stage 13 предоставляет общий storage runtime, migrations, persistent job/checkpoint state, immutable outputs, durable OSM cache, PostGIS schema/indexes, retention API и backup/restore strategy.
+Stage 13 предоставляет общий storage runtime, scoped migrations, persistent job/checkpoint state, immutable outputs, durable OSM cache, PostGIS schema/indexes, retention API и backup/restore strategy.
 
 Распределённый cache cluster, external backup scheduler, managed PostgreSQL topology, PITR infrastructure и high-availability replication относятся к deployment/platform operations и могут добавляться без изменения storage contracts.
