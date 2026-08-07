@@ -90,7 +90,7 @@ Baseline bands:
 
 Отсутствие данных никогда не преобразуется в ноль.
 
-Если невозможно получить временные границы или полный набор точек сообщения, соответствующий indicator получает `status=missing`, `raw_value=null`, `normalized_value=null`, `contribution=null`. Итоговые `score` становится `null`, а band — `unavailable`.
+Если невозможно получить временные границы или полный набор точек сообщения, соответствующий indicator получает `status=missing`, `raw_value=null`, `normalized_value=null`, `contribution=null`. Итоговый `score` становится `null`, а band — `unavailable`.
 
 Таким образом неизвестный риск не становится искусственно низким.
 
@@ -104,23 +104,31 @@ Baseline bands:
 - ролью эксперта;
 - датой проверки;
 - SHA-256 evidence;
-- решением `approved`.
+- исходным решением эксперта `approved`.
 
-`decision_use_approved=true` возможно только при `approved=true` и точном совпадении `formula_version` и `config_digest` с выполняемой конфигурацией.
+Manifest сам по себе не включает decision-use. `RiskScoringEngine` принимает отдельный `expert_validation_verifier`, который должен проверить внешнее evidence в доверенной инфраструктуре. `decision_use_approved=true` возможно только при одновременном выполнении всех условий:
 
-В репозитории не подделывается экспертное заключение. До предоставления реального внешнего экспертного evidence baseline рассчитывается для технической проверки и воспроизводимости, но handler выдаёт warning `RISK_FORMULA_NOT_EXPERT_VALIDATED`, а результат содержит `decision_use_approved=false`.
+- manifest имеет `approved=true`;
+- `formula_version` совпадает с выполняемой формулой;
+- `config_digest` совпадает с выполняемой конфигурацией;
+- внешний verifier настроен;
+- verifier подтвердил evidence.
+
+`formula_validation.approved` всегда означает эффективное разрешение для текущего запуска. Исходное решение manifest хранится отдельно в `manifest_approved`. Поэтому устаревший manifest с `approved=true` не может выглядеть применимым к новой конфигурации.
+
+В репозитории не подделывается экспертное заключение. До предоставления реального внешнего expert evidence и verifier baseline рассчитывается для технической проверки и воспроизводимости, но handler выдаёт warning `RISK_FORMULA_NOT_EXPERT_VALIDATED`, а результат содержит `decision_use_approved=false`.
 
 Изменение веса, reference, threshold или формулы меняет `config_digest` и требует нового экспертного подтверждения.
 
 ## Воспроизводимость
 
-Перед расчётом события сортируются по `event_id`, рёбра — по паре event IDs, а наборы сообщений — по полным identifiers. Результат содержит:
+Перед расчётом события сортируются по `event_id`, рёбра — по паре event IDs, а наборы сообщений — по полным identifiers. Публичные ключи `message_points` также валидируются как непустые строки до сортировки и digest. Результат содержит:
 
 - schema version;
 - algorithm version;
 - formula version;
 - input/config/output SHA-256 digests;
-- formula-validation metadata;
+- эффективное formula-validation состояние;
 - provenance способа построения связей, нормализации и CRS.
 
 Один и тот же набор событий и точек даёт одинаковый результат независимо от порядка входных коллекций.
@@ -135,6 +143,8 @@ Regression tests отдельно блокируют:
 - двойной учёт nested events;
 - трактовку отсутствующего observation как нулевого риска;
 - невалидную сумму весов и неупорядоченные thresholds;
+- stale expert approval для изменённой конфигурации;
+- включение decision-use без внешнего evidence verifier;
 - зависимость результата от порядка входа.
 
 ## Граница этапа
