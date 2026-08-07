@@ -82,7 +82,8 @@ def test_connection_has_jaccard_and_crs_safe_geometry() -> None:
     assert connection.jaccard == pytest.approx(1 / 3)
     assert connection.geometry["type"] == "LineString"
     assert connection.source_crs == "OGC:CRS84"
-    assert connection.metric_crs.startswith("EPSG:326")
+    assert connection.metric_crs is not None
+    assert "+proj=aeqd" in connection.metric_crs
     assert connection.distance_m >= 0.0
 
 
