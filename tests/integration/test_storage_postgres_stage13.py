@@ -24,7 +24,14 @@ from soika_uds.geolocation import (
     NominatimClient,
 )
 from soika_uds.integration import AnalysisRequestV1
-from soika_uds.orchestration import ConcurrentUpdateError, JobRecord, PostgresJobStore
+from soika_uds.orchestration import (
+    CheckpointState,
+    ConcurrentUpdateError,
+    JobRecord,
+    PipelineStage,
+    PostgresJobStore,
+    StageCheckpoint,
+)
 
 
 @pytest.fixture(scope="module")
@@ -249,6 +256,36 @@ def test_postgres_job_store_preserves_orchestrator_contract(
         ).fetchone()[0]
 
     assert checkpoint_count == len(created.checkpoints)
+
+
+def test_completed_checkpoint_output_is_immutable_artifact(
+    database: PostgresDatabase,
+) -> None:
+    analysis_id = "stage13-checkpoint-artifact"
+    store = PostgresJobStore(database)
+    created = _create_job(database, analysis_id)
+    completed = created.replace_checkpoint(
+        StageCheckpoint(
+            stage=PipelineStage.PREPARING,
+            state=CheckpointState.COMPLETED,
+            attempt=1,
+            started_at=datetime(2026, 8, 7, 9, 0, tzinfo=UTC),
+            completed_at=datetime(2026, 8, 7, 9, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 8, 7, 9, 1, tzinfo=UTC),
+            output={"fixture": "completed-stage-output"},
+        )
+    )
+
+    store.save(completed, expected_revision=created.revision)
+    with database.connection() as connection:
+        rows = connection.execute(
+            "SELECT artifact_key, payload FROM ga_core.artifacts "
+            "WHERE application_id = 'soika' AND analysis_id = %s "
+            "AND artifact_type = 'stage-output'",
+            (analysis_id,),
+        ).fetchall()
+
+    assert rows == [("preparing", {"fixture": "completed-stage-output"})]
 
 
 def test_immutable_artifact_round_trip_preserves_digest_and_postgis_geometry(
