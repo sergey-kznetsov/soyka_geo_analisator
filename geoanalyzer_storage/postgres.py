@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
 
 _APPLICATION_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,63}$")
 
