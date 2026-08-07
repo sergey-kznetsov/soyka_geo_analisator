@@ -12,6 +12,7 @@ from geoanalyzer_storage import (
     ArtifactRecord,
     BackupPolicy,
     BackupTarget,
+    MigrationError,
     MigrationRunner,
     PostgresDatabase,
     PostgresJsonCache,
@@ -110,6 +111,42 @@ def test_lazy_pool_initialization_is_serialized(monkeypatch: pytest.MonkeyPatch)
     database.close()
 
 
+def test_failed_synchronous_pool_open_closes_local_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = ModuleType("psycopg_pool")
+    created: list[FakePool] = []
+
+    class FakePool:
+        def __init__(self, **_kwargs: object) -> None:
+            self.close_calls = 0
+            created.append(self)
+
+        def open(self, *, wait: bool) -> None:
+            assert wait is True
+            raise RuntimeError("open failed")
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    module.ConnectionPool = FakePool  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "psycopg_pool", module)
+    database = PostgresDatabase(
+        PostgresSettings(
+            dsn="postgresql://example.invalid/test",
+            min_pool_size=0,
+            max_pool_size=1,
+        )
+    )
+
+    for _attempt in range(2):
+        with pytest.raises(RuntimeError, match="open failed"):
+            _ = database.pool
+
+    assert len(created) == 2
+    assert [pool.close_calls for pool in created] == [1, 1]
+
+
 def test_cli_applies_platform_before_dependent_scopes() -> None:
     assert _ordered_scopes(None) == ("platform",)
     assert _ordered_scopes(("soika",)) == ("platform", "soika")
@@ -144,6 +181,27 @@ def test_migration_runner_honors_configured_lock_timeout() -> None:
     assert calls == [
         ("SELECT set_config('lock_timeout', %s, true)", ("1234ms",)),
     ]
+
+
+def test_migration_runner_rejects_applied_version_missing_from_package() -> None:
+    database = PostgresDatabase(
+        PostgresSettings(
+            dsn="postgresql://example.invalid/test",
+            min_pool_size=0,
+        )
+    )
+    packaged = discover_migrations("platform")
+    runner = MigrationRunner(database, scope="platform", migrations=packaged)
+    applied = {
+        packaged[0].version: (packaged[0].name, packaged[0].checksum),
+        2: ("removed_history", "0" * 64),
+    }
+
+    with pytest.raises(
+        MigrationError,
+        match="applied migration missing from package: platform:0002_removed_history",
+    ):
+        runner._validate_applied_history(applied)
 
 
 def test_migrations_are_scoped_ordered_and_hash_pinned() -> None:
