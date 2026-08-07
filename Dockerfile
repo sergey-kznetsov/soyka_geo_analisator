@@ -31,18 +31,18 @@ RUN python -m pip install --upgrade pip setuptools wheel \
     && python -m pip install "poetry==${POETRY_VERSION}"
 
 COPY pyproject.toml poetry.lock requirements-storage.txt ./
-RUN poetry install --only main --no-root --sync \
-    && .venv/bin/python -m pip install \
-        --require-hashes \
-        --no-deps \
-        -r requirements-storage.txt
+RUN poetry install --only main --no-root --sync
 
 COPY README.md LICENSE ./
 COPY factfinder ./factfinder
 COPY pymorphy2 ./pymorphy2
 COPY soika_uds ./soika_uds
 COPY geoanalyzer_storage ./geoanalyzer_storage
-RUN poetry install --only main --sync
+RUN poetry install --only main --sync \
+    && .venv/bin/python -m pip install \
+        --require-hashes \
+        --no-deps \
+        -r requirements-storage.txt
 
 FROM ${PYTHON_IMAGE} AS runtime-base
 
