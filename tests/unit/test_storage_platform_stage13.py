@@ -123,6 +123,7 @@ def test_storage_compose_pins_postgis_and_pg18_volume_layout() -> None:
 def test_storage_requirements_are_hash_pinned() -> None:
     requirements = Path("requirements-storage.txt").read_text(encoding="utf-8")
 
+    assert "typing-extensions==4.16.0" in requirements
     assert "psycopg==3.3.4" in requirements
     assert "psycopg-pool==3.3.1" in requirements
-    assert requirements.count("--hash=sha256:") == 2
+    assert requirements.count("--hash=sha256:") == 3
