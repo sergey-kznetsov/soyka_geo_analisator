@@ -117,8 +117,7 @@ class PostgresArtifactStore:
                 "content_digest, schema_version, producer_version, source_stage, "
                 "payload, geometry_json, geometry) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                "CASE WHEN %s IS NULL THEN NULL ELSE "
-                "ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326) END) "
+                "ST_SetSRID(ST_GeomFromGeoJSON(%s::text), 4326)) "
                 "ON CONFLICT DO NOTHING RETURNING content_digest",
                 (
                     artifact.application_id,
@@ -131,7 +130,6 @@ class PostgresArtifactStore:
                     artifact.source_stage,
                     self._jsonb(payload),
                     self._jsonb(geometry) if geometry is not None else None,
-                    geometry_text,
                     geometry_text,
                 ),
             ).fetchone()
