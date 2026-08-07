@@ -39,12 +39,13 @@ jobs:
           pymorphy3-dicts-ru==2.4.417150.4580142
 
       - name: Compile Python sources
-        run: python -m compileall -q factfinder pymorphy2 soika_uds
+        run: python -m compileall -q factfinder pymorphy2 soika_uds geoanalyzer_storage
 
       - name: Lint normalized code
         run: >-
           ruff check
           soika_uds
+          geoanalyzer_storage
           pymorphy2
           factfinder/__init__.py
           factfinder/src/__init__.py
@@ -52,6 +53,7 @@ jobs:
           factfinder/src/text_classifier.py
           factfinder/src/text_classifier_topics.py
           tests/unit
+          tests/integration/test_storage_postgres_stage13.py
 
       - name: Run deterministic unit tests
         run: python -m pytest -q tests/unit
@@ -78,6 +80,58 @@ jobs:
           poetry lock
           git diff --exit-code -- poetry.lock
 
+  storage-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6@sha256:b410052c6f0d7d37b83cac1369df144e1c843971155dea3317961001704d0a9d
+        env:
+          POSTGRES_DB: geoanalyzer
+          POSTGRES_USER: geoanalyzer
+          POSTGRES_PASSWORD: stage13-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geoanalyzer -d geoanalyzer"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      GEOANALYZER_DATABASE_DSN: postgresql://geoanalyzer:stage13-ci-only@127.0.0.1:5432/geoanalyzer
+      GEOANALYZER_TEST_DATABASE_DSN: postgresql://geoanalyzer:stage13-ci-only@127.0.0.1:5432/geoanalyzer
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.15"
+          cache: pip
+
+      - name: Install libpq and focused test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpq5
+          python -m pip install --upgrade \
+            pip \
+            pytest==7.4.4 \
+            numpy==1.24.3 \
+            pyproj==3.7.2 \
+            shapely==2.0.1 \
+            pymorphy3==2.0.6 \
+            pymorphy3-dicts-ru==2.4.417150.4580142
+          python -m pip install --require-hashes --no-deps -r requirements-storage.txt
+
+      - name: Apply and inspect storage migrations
+        run: |
+          python -m geoanalyzer_storage.cli migrate --scope platform --scope soika
+          python -m geoanalyzer_storage.cli check
+
+      - name: Run live PostgreSQL PostGIS integration tests
+        run: python -m pytest -q tests/integration/test_storage_postgres_stage13.py
+
   docker-environment:
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -87,6 +141,13 @@ jobs:
 
       - name: Build CPU image
         run: docker build --target cpu --tag soika-uds:cpu .
+
+      - name: Validate storage runtime in CPU image
+        run: >-
+          docker run --rm --entrypoint python soika-uds:cpu -c
+          "import geoanalyzer_storage, psycopg, psycopg_pool;
+          assert geoanalyzer_storage.__version__ == '1.0.0';
+          assert psycopg.__version__ == '3.3.4'"
 
       - name: Start CPU environment
         run: docker run --detach --name soika-cpu --publish 18080:8080 soika-uds:cpu

@@ -26,6 +26,7 @@ from .orchestrator import (
     StageContext,
     StageHandler,
 )
+from .postgres_store import PostgresJobStore
 from .store import FileJobStore, InMemoryJobStore, OrchestrationStoreError
 
 __all__ = [
@@ -44,6 +45,7 @@ __all__ = [
     "OrchestrationStoreError",
     "PermanentStageError",
     "PipelineStage",
+    "PostgresJobStore",
     "RetryPolicy",
     "RetryableStageError",
     "SoikaOrchestrator",

@@ -1,7 +1,7 @@
 """Production geolocation and OSM contour."""
 
 from .artifacts import verify_model_artifact
-from .cache import SQLiteResponseCache
+from .cache import ResponseCache, SQLiteResponseCache
 from .crs import (
     haversine_distance_m,
     metric_crs_for,
@@ -99,6 +99,7 @@ __all__ = [
     "QualifiedGeolocationEngine",
     "RateLimiter",
     "RequestsJsonTransport",
+    "ResponseCache",
     "RuleBasedMentionExtractor",
     "SQLiteResponseCache",
     "SemanticNominatimClient",

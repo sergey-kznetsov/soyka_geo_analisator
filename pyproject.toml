@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "soika-uds-development"
-version = "0.17.0"
+version = "0.18.0"
 description = "Server-side urban comment analysis module for the Geo Analyzer ecosystem"
 authors = [
     "SOIKA upstream contributors",
@@ -12,6 +12,7 @@ packages = [
     { include = "factfinder" },
     { include = "soika_uds" },
     { include = "pymorphy2" },
+    { include = "geoanalyzer_storage" },
 ]
 include = [
     "factfinder/src/*.csv",
@@ -19,6 +20,8 @@ include = [
     "soika_uds/integration/schemas/v1/*.json",
     "soika_uds/parsers/schemas/*.json",
     "soika_uds/parsers/connectors/schemas/*.json",
+    "geoanalyzer_storage/sql/migrations/platform/*.sql",
+    "geoanalyzer_storage/sql/migrations/soika/*.sql",
 ]
 
 [tool.poetry.dependencies]
@@ -67,6 +70,7 @@ autodocsumm = "0.2.11"
 soika-uds = "soika_uds.cli:main"
 soika-classification-qualify = "soika_uds.classification.qualification_cli:main"
 soika-geolocation-qualify = "soika_uds.geolocation.qualification_cli:main"
+geoanalyzer-storage = "geoanalyzer_storage.cli:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

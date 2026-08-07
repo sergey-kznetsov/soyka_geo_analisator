@@ -22,6 +22,7 @@ RUN apt-get update \
         libgdal-dev \
         libgeos-dev \
         libopenblas-dev \
+        libpq-dev \
         libproj-dev \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
@@ -29,14 +30,19 @@ RUN apt-get update \
 RUN python -m pip install --upgrade pip setuptools wheel \
     && python -m pip install "poetry==${POETRY_VERSION}"
 
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml poetry.lock requirements-storage.txt ./
 RUN poetry install --only main --no-root --sync
 
 COPY README.md LICENSE ./
 COPY factfinder ./factfinder
 COPY pymorphy2 ./pymorphy2
 COPY soika_uds ./soika_uds
-RUN poetry install --only main --sync
+COPY geoanalyzer_storage ./geoanalyzer_storage
+RUN poetry install --only main --sync \
+    && .venv/bin/python -m pip install \
+        --require-hashes \
+        --no-deps \
+        -r requirements-storage.txt
 
 FROM ${PYTHON_IMAGE} AS runtime-base
 
@@ -61,6 +67,7 @@ RUN apt-get update \
         libgeos-c1v5 \
         libgomp1 \
         libopenblas0-pthread \
+        libpq5 \
         libproj25 \
         proj-bin \
         tini \

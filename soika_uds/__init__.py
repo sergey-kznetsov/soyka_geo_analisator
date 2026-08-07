@@ -65,6 +65,7 @@ from .geolocation import (
     MessageGeolocationResult,
     NominatimClient,
     OverpassClient,
+    ResponseCache,
     SQLiteResponseCache,
     load_qualified_registry,
     qualify_geolocation,
@@ -103,6 +104,7 @@ from .orchestration import (
     OrchestrationStoreError,
     PermanentStageError,
     PipelineStage,
+    PostgresJobStore,
     RetryableStageError,
     RetryPolicy,
     SoikaOrchestrator,
@@ -185,7 +187,7 @@ from .spatial_filtering import (
     spatial_query_plan,
 )
 
-__version__ = "0.17.0"
+__version__ = "0.18.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
@@ -292,6 +294,7 @@ __all__ = [
     "PipelineStage",
     "PostGISIndexSpec",
     "PostGISQueryPlan",
+    "PostgresJobStore",
     "PrecisionLevel",
     "Prediction",
     "PredictionFormatError",
@@ -300,6 +303,7 @@ __all__ = [
     "PreprocessingResult",
     "PreprocessingStageHandler",
     "PreprocessingStats",
+    "ResponseCache",
     "ResultProvenance",
     "RetryPolicy",
     "RetryableStageError",

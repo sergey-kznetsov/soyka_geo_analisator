@@ -7,7 +7,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
-from .cache import SQLiteResponseCache
+from .cache import ResponseCache
 from .crs import haversine_distance_m
 from .models import (
     AddressMention,
@@ -95,7 +95,7 @@ class NominatimClient:
     def __init__(
         self,
         transport: JsonTransport,
-        cache: SQLiteResponseCache,
+        cache: ResponseCache,
         *,
         base_url: str = "https://nominatim.openstreetmap.org",
         ttl_seconds: int = 30 * 24 * 60 * 60,
@@ -208,7 +208,7 @@ class OverpassClient:
     def __init__(
         self,
         transport: JsonTransport,
-        cache: SQLiteResponseCache,
+        cache: ResponseCache,
         *,
         base_url: str = "https://overpass-api.de/api/interpreter",
         timeout_seconds: int = 25,

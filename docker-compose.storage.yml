@@ -1,0 +1,30 @@
+name: geoanalyzer-storage
+
+services:
+  geo-db:
+    image: postgis/postgis:18-3.6@sha256:b410052c6f0d7d37b83cac1369df144e1c843971155dea3317961001704d0a9d
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${GEOANALYZER_DB_NAME:-geoanalyzer}
+      POSTGRES_USER: ${GEOANALYZER_DB_USER:-geoanalyzer}
+      POSTGRES_PASSWORD: ${GEOANALYZER_DB_PASSWORD:-geoanalyzer-dev-only}
+    ports:
+      - "127.0.0.1:${GEOANALYZER_DB_PORT:-15432}:5432"
+    volumes:
+      - geoanalyzer-postgres:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready
+          --username "$${POSTGRES_USER}"
+          --dbname "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  geoanalyzer-postgres:

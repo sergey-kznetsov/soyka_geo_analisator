@@ -1,4 +1,4 @@
-"""Persistent SQLite cache for OSM service responses."""
+"""Persistent response-cache contracts and the SQLite compatibility backend."""
 
 from __future__ import annotations
 
@@ -8,12 +8,25 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, Protocol
 
 from .models import canonical_json, digest_json
 
 
+class ResponseCache(Protocol):
+    """Cache surface accepted by geolocation providers."""
+
+    @staticmethod
+    def key(operation: str, parameters: Mapping[str, Any]) -> str: ...
+
+    def get(self, cache_key: str) -> Any | None: ...
+
+    def set(self, cache_key: str, payload: Any, *, ttl_seconds: int) -> None: ...
+
+
 class SQLiteResponseCache:
+    """Embedded compatibility cache; PostgreSQL is the shared production backend."""
+
     def __init__(self, path: Path, *, namespace: str) -> None:
         self._path = Path(path)
         self._namespace = namespace.strip()
@@ -91,3 +104,6 @@ class SQLiteResponseCache:
                     now,
                 ),
             )
+
+
+__all__ = ["ResponseCache", "SQLiteResponseCache"]
