@@ -1,0 +1,46 @@
+# Этап 11: события и тематическая кластеризация
+
+Статус: завершён 7 августа 2026 года.
+
+Geo Analyzer 2 не изменялся.
+
+## Результат
+
+Реализован отдельный production-контур `soika_uds.events` и handler `PipelineStage.EVENTS`. Контур строго объединяет preprocessing, classification, geolocation и spatial filtering по `message_key`; к кластеризации допускаются только сообщения, прошедшие пространственный gate.
+
+## Кластеризация
+
+Поддерживаются независимые уровни `building`, `link`, `road` и `global`. Совпадение spatial identity само по себе не создаёт событие: сообщения одного объекта дополнительно должны попасть в один семантический кластер и достигнуть `min_event_size`.
+
+Embedding, dimensionality reduction и clustering разделены интерфейсами. Embeddings вычисляются один раз на сообщение, а reduction/clustering создаются независимо для каждого scope. Изменяемая BERTopic-модель между объектами не переиспользуется. UMAP получает фиксированный `random_state`, безопасную для малых scope размерность и `init=random`; HDBSCAN создаётся заново для каждого scope и явно поддерживает `allow_single_cluster`.
+
+Минимальный объём задаётся конфигурацией. Один кластер является штатным результатом; отсутствие кластеров, недостаточный объём и отсутствующий spatial scope представлены отдельными diagnostics, а не исключениями. HDBSCAN noise label `-1` всегда остаётся diagnostics-only и не может образовать событие.
+
+## Контракты и воспроизводимость
+
+`message_ids` сохраняются как отсортированные уникальные JSON-массивы. Event ID строится из SHA-256 версии алгоритма, уровня, object ID и состава сообщений. Результат фиксирует schema/algorithm version, config/input/output digests и provenance вычислительных компонентов.
+
+Одинаковый набор входных сообщений и одинаковые компоненты дают одинаковые event IDs, состав и output digest независимо от порядка входа. Regression test отдельно подтверждает, что две разные темы по одному адресу не сливаются в одно событие.
+
+Risk, связи между событиями и итоговый score не входят в этап 11 и остаются ответственностью этапа 12.
+
+## Проверки
+
+На полном quality workflow подтверждены:
+
+- Python compilation — passed;
+- Ruff — passed;
+- 242 deterministic unit/orchestration tests — passed;
+- `poetry.lock` consistency — passed;
+- CPU Docker build/start — passed;
+- `/healthz` и `/readyz` — passed;
+- GPU target build — passed;
+- оба automated review threads — исправлены и resolved.
+
+## Критерий завершения
+
+Критерий этапа выполнен: события не объединяются только по адресу, минимальный объём и крайние случаи обрабатываются явно, а фиксированный вход воспроизводится независимо от порядка обработки.
+
+Следующий активный этап: этап 12 — связи, показатели и риск.
+
+Подробности: `docs/EVENT_CLUSTERING.md`.

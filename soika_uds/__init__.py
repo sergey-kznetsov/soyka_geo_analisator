@@ -26,6 +26,27 @@ from .contracts import (
     TerritoryContext,
 )
 from .engine import SoikaEngine
+from .events import ALGORITHM_VERSION as EVENTS_ALGORITHM_VERSION
+from .events import (
+    ClusterAssignment,
+    CosineGraphClusterer,
+    EmbeddingBatch,
+    EventBatchResult,
+    EventBatchStats,
+    EventCluster,
+    EventClusteringConfig,
+    EventClusteringEngine,
+    EventClusteringStageHandler,
+    EventLevel,
+    EventMessage,
+    HashingEmbeddingBackend,
+    HDBSCANClusteringBackend,
+    IdentityReductionBackend,
+    ScopeDiagnostic,
+    ScopeStatus,
+    SentenceTransformerEmbeddingBackend,
+    UMAPReductionBackend,
+)
 from .geolocation import ALGORITHM_VERSION as GEOLOCATION_ALGORITHM_VERSION
 from .geolocation import (
     AddressMention,
@@ -148,10 +169,11 @@ from .spatial_filtering import (
     spatial_query_plan,
 )
 
-__version__ = "0.15.0"
+__version__ = "0.16.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
+    "EVENTS_ALGORITHM_VERSION",
     "GEOLOCATION_ALGORITHM_VERSION",
     "PIPELINE_STAGES",
     "PREPROCESSING_ALGORITHM_VERSION",
@@ -172,6 +194,7 @@ __all__ = [
     "ClassificationRegistry",
     "ClassificationStageHandler",
     "ClassificationStats",
+    "ClusterAssignment",
     "ComplianceContext",
     "ComplianceGate",
     "ConcurrentUpdateError",
@@ -179,11 +202,21 @@ __all__ = [
     "ContractIssue",
     "ContractValidationError",
     "ContractVersion",
+    "CosineGraphClusterer",
     "CoverageSummary",
     "DataCategory",
     "DataProtectionPolicy",
     "DuplicateDecision",
     "DuplicateKind",
+    "EmbeddingBatch",
+    "EventBatchResult",
+    "EventBatchStats",
+    "EventCluster",
+    "EventClusteringConfig",
+    "EventClusteringEngine",
+    "EventClusteringStageHandler",
+    "EventLevel",
+    "EventMessage",
     "ExecutionDevice",
     "FileJobStore",
     "FileParserCheckpointStore",
@@ -198,7 +231,10 @@ __all__ = [
     "GeolocationThresholds",
     "GeolocationValidationManifest",
     "GeoPoint",
+    "HDBSCANClusteringBackend",
+    "HashingEmbeddingBackend",
     "IdempotencyConflictError",
+    "IdentityReductionBackend",
     "InMemoryJobStore",
     "InvalidStageOutputError",
     "JobLeaseError",
@@ -245,6 +281,9 @@ __all__ = [
     "RetryableStageError",
     "SQLiteResponseCache",
     "SafeHttpTransport",
+    "ScopeDiagnostic",
+    "ScopeStatus",
+    "SentenceTransformerEmbeddingBackend",
     "SoikaEngine",
     "SoikaOrchestrator",
     "SourceMessage",
@@ -267,6 +306,7 @@ __all__ = [
     "TerritoryMode",
     "TransformationTrace",
     "TransformersPredictionBackend",
+    "UMAPReductionBackend",
     "assert_idempotent_request",
     "build_spatial_target",
     "canonicalize_url",
