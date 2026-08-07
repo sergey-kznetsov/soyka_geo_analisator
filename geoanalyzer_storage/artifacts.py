@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
@@ -10,11 +10,39 @@ from typing import Any
 from .contracts import application_id, canonical_json, digest_json
 from .postgres import PostgresDatabase
 
+_GEOJSON_GEOMETRY_TYPES = frozenset(
+    {
+        "Point",
+        "MultiPoint",
+        "LineString",
+        "MultiLineString",
+        "Polygon",
+        "MultiPolygon",
+        "GeometryCollection",
+    }
+)
+
 
 def _text(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must be a non-empty string")
     return value.strip()
+
+
+def _freeze(value: object) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+def _thaw(value: object) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _thaw(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw(item) for item in value]
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,23 +68,22 @@ class ArtifactRecord:
         if not isinstance(self.payload, Mapping):
             raise ValueError("artifact payload must be an object")
         canonical_json(self.payload)
-        object.__setattr__(self, "payload", MappingProxyType(dict(self.payload)))
+        object.__setattr__(self, "payload", _freeze(self.payload))
         if self.geometry is not None:
             if not isinstance(self.geometry, Mapping):
-                raise ValueError("artifact geometry must be a GeoJSON object")
+                raise ValueError("artifact geometry must be a GeoJSON geometry object")
             canonical_json(self.geometry)
-            object.__setattr__(
-                self,
-                "geometry",
-                MappingProxyType(dict(self.geometry)),
-            )
+            geometry_type = self.geometry.get("type")
+            if geometry_type not in _GEOJSON_GEOMETRY_TYPES:
+                raise ValueError("artifact geometry must be a GeoJSON geometry, not a feature")
+            object.__setattr__(self, "geometry", _freeze(self.geometry))
 
     @property
     def content_digest(self) -> str:
         return digest_json(
             {
-                "payload": dict(self.payload),
-                "geometry": dict(self.geometry) if self.geometry is not None else None,
+                "payload": _thaw(self.payload),
+                "geometry": _thaw(self.geometry) if self.geometry is not None else None,
             }
         )
 
@@ -80,7 +107,8 @@ class PostgresArtifactStore:
     def put(self, artifact: ArtifactRecord) -> bool:
         if not isinstance(artifact, ArtifactRecord):
             raise TypeError("artifact must be ArtifactRecord")
-        geometry = dict(artifact.geometry) if artifact.geometry is not None else None
+        payload = _thaw(artifact.payload)
+        geometry = _thaw(artifact.geometry) if artifact.geometry is not None else None
         geometry_text = canonical_json(geometry) if geometry is not None else None
         with self.database.connection() as connection:
             row = connection.execute(
@@ -101,7 +129,7 @@ class PostgresArtifactStore:
                     artifact.schema_version,
                     artifact.producer_version,
                     artifact.source_stage,
-                    self._jsonb(dict(artifact.payload)),
+                    self._jsonb(payload),
                     self._jsonb(geometry) if geometry is not None else None,
                     geometry_text,
                     geometry_text,
