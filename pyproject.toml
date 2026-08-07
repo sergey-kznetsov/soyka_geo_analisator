@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "soika-uds-development"
-version = "0.16.0"
+version = "0.17.0"
 description = "Server-side urban comment analysis module for the Geo Analyzer ecosystem"
 authors = [
     "SOIKA upstream contributors",
