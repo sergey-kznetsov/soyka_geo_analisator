@@ -32,7 +32,7 @@ Runner:
 
 - выполняет migrations транзакционно;
 - сериализует параллельные запуски PostgreSQL advisory transaction lock;
-- ограничивает ожидание `lock_timeout`;
+- устанавливает transaction-local `lock_timeout` из `PostgresSettings.lock_timeout_ms`, не переопределяя пользовательскую настройку фиксированным значением;
 - хранит SHA-256 каждой применённой migration;
 - fail-closed при изменении уже применённого SQL;
 - повторное применение неизменённого scope является no-op;
@@ -133,12 +133,13 @@ Backup/restore baseline:
 
 ## Automated review
 
-Закрыты два P2 замечания automated review:
+Закрыты три P2 замечания automated review:
 
-1. dependent migration scopes теперь не могут выполниться раньше `platform` даже при обратном порядке CLI arguments;
-2. concurrent first access больше не может создать два lazy PostgreSQL connection pools.
+1. dependent migration scopes не могут выполниться раньше `platform` даже при обратном порядке CLI arguments;
+2. concurrent first access не может создать два lazy PostgreSQL connection pools;
+3. migration runner сохраняет настроенный `PostgresSettings.lock_timeout_ms` через transaction-local `set_config`; regression с `1234 ms` подтверждает отсутствие фиксированного пятисекундного override.
 
-Оба дефекта покрыты regression tests, review threads resolved.
+Все три дефекта покрыты regression tests, review threads resolved.
 
 ## Проверенная среда
 
@@ -161,7 +162,7 @@ GitHub Actions подтвердил:
 
 - Python compilation — passed;
 - Ruff — passed;
-- 274 deterministic unit/regression tests — passed;
+- 275 deterministic unit/regression tests — passed;
 - 8 live PostgreSQL/PostGIS integration tests — passed;
 - `poetry.lock` consistency — passed;
 - geolocation qualification workflow — passed;
