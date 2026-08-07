@@ -84,7 +84,14 @@ class PostgresDatabase:
             configure=self._configure,
             open=False,
         )
-        pool.open(wait=True)
+        try:
+            pool.open(wait=True)
+        except BaseException:
+            try:
+                pool.close()
+            except Exception:
+                pass
+            raise
         return pool
 
     @property
