@@ -142,6 +142,13 @@ jobs:
       - name: Build CPU image
         run: docker build --target cpu --tag soika-uds:cpu .
 
+      - name: Validate storage runtime in CPU image
+        run: >-
+          docker run --rm --entrypoint python soika-uds:cpu -c
+          "import geoanalyzer_storage, psycopg, psycopg_pool;
+          assert geoanalyzer_storage.__version__ == '1.0.0';
+          assert psycopg.__version__ == '3.3.4'"
+
       - name: Start CPU environment
         run: docker run --detach --name soika-cpu --publish 18080:8080 soika-uds:cpu
 
