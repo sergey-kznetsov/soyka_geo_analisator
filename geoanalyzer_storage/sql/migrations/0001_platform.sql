@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS ga_core.jobs (
     lease_expires_at TIMESTAMPTZ,
     PRIMARY KEY (application_id, analysis_id),
     UNIQUE (application_id, idempotency_key),
-    CHECK (payload->>'analysis_id' = analysis_id),
-    CHECK ((payload->>'revision')::BIGINT = revision)
+    CHECK (payload ? 'analysis_id' AND payload->>'analysis_id' = analysis_id),
+    CHECK (payload ? 'revision' AND (payload->>'revision')::BIGINT = revision)
 );
 
 CREATE INDEX IF NOT EXISTS idx_ga_core_jobs_status_updated
@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS ga_core.artifacts (
     producer_version TEXT,
     source_stage TEXT,
     payload JSONB NOT NULL,
+    geometry_json JSONB,
     geometry geometry(Geometry, 4326),
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (
@@ -83,7 +84,10 @@ CREATE TABLE IF NOT EXISTS ga_core.artifacts (
     FOREIGN KEY (application_id, analysis_id)
         REFERENCES ga_core.jobs(application_id, analysis_id)
         ON DELETE CASCADE,
-    CHECK (content_digest ~ '^[a-f0-9]{64}$')
+    CHECK (content_digest ~ '^[a-f0-9]{64}$'),
+    CHECK (jsonb_typeof(payload) = 'object'),
+    CHECK (geometry_json IS NULL OR jsonb_typeof(geometry_json) = 'object'),
+    CHECK ((geometry_json IS NULL) = (geometry IS NULL))
 );
 
 CREATE INDEX IF NOT EXISTS idx_ga_core_artifacts_lookup
