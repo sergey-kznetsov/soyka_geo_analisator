@@ -206,6 +206,21 @@ def test_backup_commands_do_not_accept_or_emit_passwords() -> None:
     assert not any("password" in part.casefold() for part in dump + restore)
 
 
+def test_pg_restore_terminates_options_before_archive_path() -> None:
+    target = BackupTarget(
+        host="db.internal",
+        port=5432,
+        database="geoanalyzer",
+        user="restore_user",
+    )
+
+    command = pg_restore_command(target, Path("--dbname=other"))
+
+    assert command[-2:] == ("--", "--dbname=other")
+    assert command.count("--dbname") == 1
+    assert command[command.index("--dbname") + 1] == "geoanalyzer"
+
+
 def test_retention_and_backup_policies_are_fail_closed() -> None:
     assert RetentionPolicy().cleanup_batch_size == 5_000
     assert BackupPolicy().keep_daily == 7
