@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -8,6 +12,7 @@ from geoanalyzer_storage import (
     ArtifactRecord,
     BackupPolicy,
     BackupTarget,
+    PostgresDatabase,
     PostgresJsonCache,
     PostgresSettings,
     RetentionPolicy,
@@ -18,6 +23,7 @@ from geoanalyzer_storage import (
     pg_dump_command,
     pg_restore_command,
 )
+from geoanalyzer_storage.cli import _ordered_scopes
 from soika_uds import PostgresJobStore, ResponseCache
 
 
@@ -68,6 +74,49 @@ def test_storage_dependencies_remain_lazy_at_import_time() -> None:
         )
     )
     assert hasattr(ResponseCache, "get")
+
+
+def test_lazy_pool_initialization_is_serialized(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = ModuleType("psycopg_pool")
+    created: list[object] = []
+
+    class FakePool:
+        def __init__(self, **_kwargs: object) -> None:
+            created.append(self)
+
+        def open(self, *, wait: bool) -> None:
+            assert wait is True
+            time.sleep(0.02)
+
+        def close(self) -> None:
+            pass
+
+    module.ConnectionPool = FakePool  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "psycopg_pool", module)
+    database = PostgresDatabase(
+        PostgresSettings(
+            dsn="postgresql://example.invalid/test",
+            min_pool_size=0,
+            max_pool_size=1,
+        )
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        pools = tuple(executor.map(lambda _index: database.pool, range(2)))
+
+    assert len(created) == 1
+    assert pools[0] is pools[1]
+    database.close()
+
+
+def test_cli_applies_platform_before_dependent_scopes() -> None:
+    assert _ordered_scopes(None) == ("platform",)
+    assert _ordered_scopes(("soika",)) == ("platform", "soika")
+    assert _ordered_scopes(("soika", "platform")) == ("platform", "soika")
+    assert _ordered_scopes(("platform", "soika", "soika")) == (
+        "platform",
+        "soika",
+    )
 
 
 def test_migrations_are_scoped_ordered_and_hash_pinned() -> None:
