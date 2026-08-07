@@ -2,16 +2,27 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
 from geoanalyzer_storage import (
+    ApplicationRegistration,
+    ArtifactRecord,
     MigrationRunner,
+    PostgresApplicationRegistry,
+    PostgresArtifactStore,
     PostgresDatabase,
     PostgresJsonCache,
     PostgresSettings,
 )
 from soika_uds.contracts import TerritoryContext
+from soika_uds.geolocation import (
+    AddressMention,
+    LocationKind,
+    MentionSource,
+    NominatimClient,
+)
 from soika_uds.integration import AnalysisRequestV1
 from soika_uds.orchestration import ConcurrentUpdateError, JobRecord, PostgresJobStore
 
@@ -71,6 +82,27 @@ def test_soika_domain_has_real_postgis_indexes(database: PostgresDatabase) -> No
     assert "idx_ga_soika_event_connections_geometry_gist" in indexes
 
 
+def test_application_registry_is_shared_but_domain_schema_is_isolated(
+    database: PostgresDatabase,
+) -> None:
+    registry = PostgresApplicationRegistry(database)
+    registration = ApplicationRegistration(
+        application_id="stage13-service",
+        domain_schema="ga_stage13_service",
+    )
+
+    registry.register(registration)
+    with database.connection() as connection:
+        row = connection.execute(
+            "SELECT domain_schema::text, active FROM ga_meta.applications "
+            "WHERE application_id = %s",
+            (registration.application_id,),
+        ).fetchone()
+
+    assert row == ("ga_stage13_service", True)
+    assert registry.disable(registration.application_id) is True
+
+
 def test_postgres_cache_has_ttl_and_application_isolation(
     database: PostgresDatabase,
 ) -> None:
@@ -110,6 +142,59 @@ def test_postgres_cache_has_ttl_and_application_isolation(
     assert other_cache.get(key) == {"source": "other"}
 
 
+class _CountingTransport:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def request_json(self, _method: str, _url: str, **_kwargs: Any) -> Any:
+        self.calls += 1
+        return [
+            {
+                "lon": "49.1064",
+                "lat": "55.7963",
+                "display_name": "ул. Баумана, 1, Казань",
+                "importance": 0.8,
+                "osm_type": "way",
+                "osm_id": 123,
+                "addresstype": "house",
+                "address": {"city": "Казань", "road": "улица Баумана"},
+            }
+        ]
+
+
+def test_repeated_osm_lookup_uses_postgres_cache_without_redownload(
+    database: PostgresDatabase,
+) -> None:
+    cache = PostgresJsonCache(
+        database,
+        application="soika",
+        namespace="osm.nominatim:repeat-v1",
+    )
+    transport = _CountingTransport()
+    mention = AddressMention(
+        text="ул. Баумана, 1",
+        normalized="улица баумана 1",
+        kind=LocationKind.HOUSE,
+        confidence=0.95,
+        source=MentionSource.RULES,
+        street="Баумана",
+        house_number="1",
+    )
+    parameters = {
+        "city": "Казань",
+        "country_codes": ("ru",),
+        "language": "ru",
+        "limit": 5,
+    }
+
+    first = NominatimClient(transport, cache).search(mention, **parameters)
+    second = NominatimClient(transport, cache).search(mention, **parameters)
+
+    assert first == second
+    assert len(first) == 1
+    assert transport.calls == 1
+
+
 def _request(analysis_id: str) -> AnalysisRequestV1:
     return AnalysisRequestV1(
         analysis_id=analysis_id,
@@ -122,6 +207,14 @@ def _request(analysis_id: str) -> AnalysisRequestV1:
             radius_meters=1_000,
         ),
     )
+
+
+def _create_job(database: PostgresDatabase, analysis_id: str) -> JobRecord:
+    candidate = JobRecord.new(
+        _request(analysis_id),
+        datetime(2026, 8, 7, 9, 0, tzinfo=UTC),
+    )
+    return PostgresJobStore(database).create_idempotent(candidate)
 
 
 def test_postgres_job_store_preserves_orchestrator_contract(
@@ -156,3 +249,45 @@ def test_postgres_job_store_preserves_orchestrator_contract(
         ).fetchone()[0]
 
     assert checkpoint_count == len(created.checkpoints)
+
+
+def test_immutable_artifact_round_trip_preserves_digest_and_postgis_geometry(
+    database: PostgresDatabase,
+) -> None:
+    analysis_id = "stage13-artifact-job"
+    _create_job(database, analysis_id)
+    store = PostgresArtifactStore(database)
+    artifact = ArtifactRecord(
+        application_id="soika",
+        analysis_id=analysis_id,
+        artifact_type="map-layer",
+        artifact_key="event-centroid",
+        payload={"event_id": "evt-1", "score": 0.75},
+        schema_version="1.0.0",
+        producer_version="0.18.0",
+        source_stage="scoring",
+        geometry={"type": "Point", "coordinates": [49.1064, 55.7963]},
+    )
+
+    assert store.put(artifact) is True
+    assert store.put(artifact) is False
+    loaded = store.get_latest(
+        application="soika",
+        analysis_id=analysis_id,
+        artifact_type="map-layer",
+        artifact_key="event-centroid",
+    )
+
+    assert loaded is not None
+    assert loaded.content_digest == artifact.content_digest
+    assert dict(loaded.geometry or {}) == dict(artifact.geometry or {})
+    with database.connection() as connection:
+        srid, geometry_type = connection.execute(
+            "SELECT ST_SRID(geometry), GeometryType(geometry) "
+            "FROM ga_core.artifacts WHERE application_id = 'soika' "
+            "AND analysis_id = %s AND content_digest = %s",
+            (analysis_id, artifact.content_digest),
+        ).fetchone()
+
+    assert srid == 4326
+    assert geometry_type == "POINT"
