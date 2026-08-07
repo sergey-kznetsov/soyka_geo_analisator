@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from itertools import combinations
 from typing import Any
 
-from pyproj import Transformer
+from pyproj import Geod, Transformer
 
 from ..events import EventCluster
 from ..geolocation import GeoPoint
@@ -28,6 +28,9 @@ from .models import (
     ScoringStats,
     digest_json,
 )
+
+_WGS84_GEOD = Geod(ellps="WGS84")
+_LOCAL_RADIUS_LIMIT_M = 1_500_000.0
 
 
 def _parse_time(value: str | None, name: str) -> datetime | None:
@@ -90,36 +93,72 @@ def _point(value: object, name: str) -> GeoPoint | None:
     return GeoPoint(longitude=coordinates[0], latitude=coordinates[1])
 
 
-def _longitude_center(longitudes: Sequence[float]) -> float:
-    """Return a wrapped circular longitude center in [-180, 180]."""
-    if not longitudes:
-        raise ValueError("longitude center requires at least one value")
-    sin_sum = sum(math.sin(math.radians(value)) for value in longitudes)
-    cos_sum = sum(math.cos(math.radians(value)) for value in longitudes)
-    if math.hypot(sin_sum, cos_sum) < 1e-12:
-        return float(longitudes[0])
-    result = math.degrees(math.atan2(sin_sum, cos_sum))
-    return 180.0 if math.isclose(result, -180.0, abs_tol=1e-12) else result
+def _wrapped_delta(longitude: float, reference: float) -> float:
+    delta = longitude - reference
+    while delta > 180.0:
+        delta -= 360.0
+    while delta < -180.0:
+        delta += 360.0
+    return delta
 
 
-def _metric_crs(longitude: float, latitude: float) -> str:
-    if -80.0 <= latitude <= 84.0:
-        zone = min(60, max(1, int((longitude + 180.0) // 6.0) + 1))
-        return f"EPSG:{32600 + zone if latitude >= 0.0 else 32700 + zone}"
+def _unwrap_longitude(longitude: float, reference: float) -> float:
+    return reference + _wrapped_delta(longitude, reference)
+
+
+def _spherical_centroid(points: Sequence[GeoPoint]) -> GeoPoint:
+    if not points:
+        raise ValueError("spherical centroid requires at least one point")
+    x = 0.0
+    y = 0.0
+    z = 0.0
+    for point in points:
+        longitude = math.radians(point.longitude)
+        latitude = math.radians(point.latitude)
+        cos_lat = math.cos(latitude)
+        x += cos_lat * math.cos(longitude)
+        y += cos_lat * math.sin(longitude)
+        z += math.sin(latitude)
+    norm = math.sqrt(x * x + y * y + z * z)
+    if norm < 1e-12:
+        fallback = min(points, key=lambda item: (item.longitude, item.latitude))
+        return GeoPoint(longitude=fallback.longitude, latitude=fallback.latitude)
+    longitude = math.degrees(math.atan2(y, x))
+    latitude = math.degrees(math.atan2(z, math.hypot(x, y)))
+    return GeoPoint(longitude=longitude, latitude=latitude)
+
+
+def _geodesic_distance(left: GeoPoint, right: GeoPoint) -> float:
+    _azimuth, _back_azimuth, distance = _WGS84_GEOD.inv(
+        left.longitude,
+        left.latitude,
+        right.longitude,
+        right.latitude,
+    )
+    result = abs(float(distance))
+    if not math.isfinite(result):
+        raise ValueError("WGS84 geodesic distance must be finite")
+    return result
+
+
+def _aeqd_crs(center: GeoPoint) -> str:
     return (
-        f"+proj=aeqd +lat_0={latitude:.12g} +lon_0={longitude:.12g} "
+        f"+proj=aeqd +lat_0={center.latitude:.12g} +lon_0={center.longitude:.12g} "
         "+datum=WGS84 +units=m +no_defs +type=crs"
     )
 
 
 def _projected_points(
     points: Sequence[GeoPoint],
+    center: GeoPoint,
 ) -> tuple[str, tuple[tuple[float, float], ...]]:
-    longitude = _longitude_center(tuple(item.longitude for item in points))
-    latitude = sum(item.latitude for item in points) / len(points)
-    metric_crs = _metric_crs(longitude, latitude)
+    metric_crs = _aeqd_crs(center)
     transformer = Transformer.from_crs(SOURCE_CRS, metric_crs, always_xy=True)
-    projected = tuple(transformer.transform(item.longitude, item.latitude) for item in points)
+    projected = tuple(
+        transformer.transform(item.longitude, item.latitude) for item in points
+    )
+    if any(not all(math.isfinite(value) for value in item) for item in projected):
+        raise ValueError("local metric projection produced non-finite coordinates")
     return metric_crs, projected
 
 
@@ -139,13 +178,101 @@ def _centroid_and_spread(
         return None, None, tuple(missing), None
     if not points:
         return None, None, tuple(event.message_ids), None
-    metric_crs, projected = _projected_points(points)
+
+    spherical_center = _spherical_centroid(points)
+    radial_distances = tuple(
+        _geodesic_distance(spherical_center, point) for point in points
+    )
+    if max(radial_distances, default=0.0) > _LOCAL_RADIUS_LIMIT_M:
+        return spherical_center, max(radial_distances), (), None
+
+    metric_crs, projected = _projected_points(points, spherical_center)
     centroid_x = sum(item[0] for item in projected) / len(projected)
     centroid_y = sum(item[1] for item in projected) / len(projected)
     reverse = Transformer.from_crs(metric_crs, SOURCE_CRS, always_xy=True)
     longitude, latitude = reverse.transform(centroid_x, centroid_y)
+    if not math.isfinite(longitude) or not math.isfinite(latitude):
+        raise ValueError("local metric centroid produced non-finite coordinates")
+    centroid = GeoPoint(longitude=longitude, latitude=latitude)
     spread = max(math.hypot(x - centroid_x, y - centroid_y) for x, y in projected)
-    return GeoPoint(longitude=longitude, latitude=latitude), spread, (), metric_crs
+    return centroid, spread, (), metric_crs
+
+
+def _geodesic_midpoint(
+    left: GeoPoint,
+    azimuth: float,
+    distance_m: float,
+) -> GeoPoint:
+    longitude, latitude, _back = _WGS84_GEOD.fwd(
+        left.longitude,
+        left.latitude,
+        azimuth,
+        distance_m / 2.0,
+    )
+    return GeoPoint(longitude=longitude, latitude=latitude)
+
+
+def _antimeridian_crossing(
+    left: GeoPoint,
+    right: GeoPoint,
+    azimuth: float,
+    distance_m: float,
+) -> tuple[float, float] | None:
+    right_unwrapped = _unwrap_longitude(right.longitude, left.longitude)
+    if -180.0 <= right_unwrapped <= 180.0:
+        return None
+    boundary = 180.0 if right_unwrapped > 180.0 else -180.0
+    increasing = right_unwrapped > left.longitude
+    low = 0.0
+    high = 1.0
+    crossing_latitude = (left.latitude + right.latitude) / 2.0
+    for _ in range(64):
+        fraction = (low + high) / 2.0
+        longitude, latitude, _back = _WGS84_GEOD.fwd(
+            left.longitude,
+            left.latitude,
+            azimuth,
+            distance_m * fraction,
+        )
+        unwrapped = _unwrap_longitude(longitude, left.longitude)
+        crossing_latitude = latitude
+        if (unwrapped < boundary) == increasing:
+            low = fraction
+        else:
+            high = fraction
+    return boundary, crossing_latitude
+
+
+def _connection_geojson(
+    left: GeoPoint,
+    right: GeoPoint,
+    azimuth: float,
+    distance_m: float,
+) -> Mapping[str, Any]:
+    crossing = _antimeridian_crossing(left, right, azimuth, distance_m)
+    if crossing is None:
+        return {
+            "type": "LineString",
+            "coordinates": [
+                [left.longitude, left.latitude],
+                [right.longitude, right.latitude],
+            ],
+        }
+    boundary, latitude = crossing
+    opposite = -180.0 if boundary > 0.0 else 180.0
+    return {
+        "type": "MultiLineString",
+        "coordinates": [
+            [
+                [left.longitude, left.latitude],
+                [boundary, latitude],
+            ],
+            [
+                [opposite, latitude],
+                [right.longitude, right.latitude],
+            ],
+        ],
+    }
 
 
 def _connection_geometry(
@@ -154,21 +281,35 @@ def _connection_geometry(
 ) -> tuple[Mapping[str, Any] | None, str | None, float | None]:
     if left is None or right is None:
         return None, None, None
-    midpoint_lon = _longitude_center((left.longitude, right.longitude))
-    midpoint_lat = (left.latitude + right.latitude) / 2.0
-    metric_crs = _metric_crs(midpoint_lon, midpoint_lat)
+
+    azimuth, _back_azimuth, geodesic_distance = _WGS84_GEOD.inv(
+        left.longitude,
+        left.latitude,
+        right.longitude,
+        right.latitude,
+    )
+    distance_m = abs(float(geodesic_distance))
+    if not math.isfinite(distance_m):
+        raise ValueError("connection geodesic distance must be finite")
+    geometry = _connection_geojson(left, right, azimuth, distance_m)
+
+    if distance_m > 2.0 * _LOCAL_RADIUS_LIMIT_M:
+        return geometry, None, distance_m
+
+    midpoint = _geodesic_midpoint(left, azimuth, distance_m)
+    metric_crs = _aeqd_crs(midpoint)
     transformer = Transformer.from_crs(SOURCE_CRS, metric_crs, always_xy=True)
     left_xy = transformer.transform(left.longitude, left.latitude)
     right_xy = transformer.transform(right.longitude, right.latitude)
-    distance = math.hypot(right_xy[0] - left_xy[0], right_xy[1] - left_xy[1])
-    geometry = {
-        "type": "LineString",
-        "coordinates": [
-            [left.longitude, left.latitude],
-            [right.longitude, right.latitude],
-        ],
-    }
-    return geometry, metric_crs, distance
+    if not all(math.isfinite(value) for value in (*left_xy, *right_xy)):
+        return geometry, None, distance_m
+    projected_distance = math.hypot(
+        right_xy[0] - left_xy[0],
+        right_xy[1] - left_xy[1],
+    )
+    if not math.isfinite(projected_distance):
+        return geometry, None, distance_m
+    return geometry, metric_crs, projected_distance
 
 
 def _normalized(value: float, reference: float) -> float:
@@ -270,7 +411,9 @@ class RiskScoringEngine:
                 continue
             union_size = len(set(left.message_ids) | set(right.message_ids))
             jaccard = len(shared) / union_size
-            source, target = (left, right) if left.event_id < right.event_id else (right, left)
+            source, target = (
+                (left, right) if left.event_id < right.event_id else (right, left)
+            )
             geometry, metric_crs, distance = _connection_geometry(
                 centroids[source.event_id], centroids[target.event_id]
             )
@@ -424,7 +567,9 @@ class RiskScoringEngine:
         missing_points: dict[str, tuple[str, ...]] = {}
         metric_crs_by_event: dict[str, str | None] = {}
         for event in ordered:
-            centroid, spread, missing, metric_crs = _centroid_and_spread(event, message_points)
+            centroid, spread, missing, metric_crs = _centroid_and_spread(
+                event, message_points
+            )
             centroids[event.event_id] = centroid
             spreads[event.event_id] = spread
             missing_points[event.event_id] = missing
@@ -468,9 +613,10 @@ class RiskScoringEngine:
             "connection_evidence": "exact_message_id_set_intersection",
             "connection_weight": "jaccard_index",
             "line_source_crs": SOURCE_CRS,
-            "line_distance_method": "pyproj_always_xy_to_local_metric_crs",
-            "polar_metric_crs": "local_azimuthal_equidistant",
-            "longitude_center_method": "circular_mean",
+            "line_distance_method": "local_aeqd_or_wgs84_geodesic",
+            "antimeridian_geometry": "split_multilinestring",
+            "event_spread_method": "local_aeqd_or_wgs84_geodesic",
+            "local_projection_radius_limit_m": _LOCAL_RADIUS_LIMIT_M,
             "event_metric_crs": metric_crs_by_event,
             "dataset_relative_minmax": False,
             "zero_range_policy": "fixed_positive_references_remove_zero_range_division",
