@@ -34,6 +34,8 @@ Events stage объединяет данные предыдущих заверш
 
 Поэтому разные темы по одному дому или одной улице не объединяются автоматически. Объяснение каждого события содержит `shared_spatial_scope`, `semantic_cluster_assignment`, состав, доминирующие category/topic, ключевые слова и representative message IDs.
 
+HDBSCAN label `-1` всегда считается шумом и остаётся только в diagnostics. Он никогда не агрегируется в событие, даже если совместимый config marker `include_noise` включён. Это исключает создание ложного «семантического» события из несвязанных выбросов одного пространственного scope.
+
 ## Минимальный объём и специальные случаи
 
 `EventClusteringConfig` явно задаёт:
@@ -41,7 +43,6 @@ Events stage объединяет данные предыдущих заверш
 - `min_scope_messages` — минимальный объём сообщений, при котором запускается кластеризация scope;
 - `min_event_size` — минимальный размер одного события;
 - `allow_single_cluster` — допустим ли единственный кластер;
-- `include_noise` — включается ли noise label `-1`;
 - `max_events_per_scope` — защитная верхняя граница.
 
 Scope меньше минимального объёма получает `insufficient_data`. Нормальный запуск, не сформировавший кластеров, получает `no_clusters`; это не исключение. Единственный кластер является валидным результатом, когда `allow_single_cluster=true`.
@@ -59,7 +60,7 @@ Embeddings рассчитываются один раз на сообщение 
 Для production предусмотрены:
 
 - `SentenceTransformerEmbeddingBackend` — принимает уже загруженную и предварительно проверенную модель; adapter требует immutable 40-character revision и SHA-256 весов и сам ничего не скачивает;
-- `UMAPReductionBackend` — создаёт новый UMAP для каждого scope с фиксированным `random_state`;
+- `UMAPReductionBackend` — создаёт новый UMAP для каждого scope с фиксированным `random_state` и `init=random`; для малого scope размерность ограничивается `n_samples - 2`, поэтому spectral-limit ошибка `k >= N` не возникает;
 - `HDBSCANClusteringBackend` — создаёт новый HDBSCAN для каждого scope и явно передаёт `allow_single_cluster`.
 
 Для сетенезависимых тестов доступны deterministic `HashingEmbeddingBackend`, `IdentityReductionBackend` и `CosineGraphClusterer`.
@@ -76,7 +77,8 @@ Embeddings рассчитываются один раз на сообщение 
 - canonical output digest;
 - provenance embedding/reduction/clustering;
 - seed каждого scope;
-- признак `mutable_topic_model_reuse=false`.
+- признак `mutable_topic_model_reuse=false`;
+- политику `noise_event_policy=diagnostics_only`.
 
 Одинаковый вход и одинаковые компоненты должны давать одинаковые event IDs, составы и output digest независимо от порядка входного массива.
 
@@ -90,12 +92,14 @@ Embeddings рассчитываются один раз на сообщение 
 
 ## Проверка
 
-Regression tests должны подтверждать минимум следующие свойства:
+Regression tests подтверждают минимум следующие свойства:
 
 - один адрес с двумя семантическими темами формирует разные события;
 - `message_ids` остаются массивами;
 - результат не зависит от порядка входа;
 - один кластер обрабатывается штатно;
 - отсутствие кластеров не вызывает исключение;
+- noise label `-1` не превращается в событие;
+- UMAP-параметры малого scope остаются ниже spectral sample limit;
 - недостаточный объём и отсутствующие spatial scopes видимы в diagnostics;
 - orchestration join является строгим и JSON-compatible.
