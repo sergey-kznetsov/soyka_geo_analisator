@@ -70,17 +70,24 @@ def test_storage_dependencies_remain_lazy_at_import_time() -> None:
     assert hasattr(ResponseCache, "get")
 
 
-def test_migrations_are_ordered_hash_pinned_and_schema_isolated() -> None:
-    migrations = discover_migrations()
+def test_migrations_are_scoped_ordered_and_hash_pinned() -> None:
+    platform_migrations = discover_migrations("platform")
+    soika_migrations = discover_migrations("soika")
 
-    assert [item.version for item in migrations] == [1, 2]
-    assert all(len(item.checksum) == 64 for item in migrations)
-    platform = migrations[0].sql
-    soika = migrations[1].sql
+    assert [(item.scope, item.version) for item in platform_migrations] == [
+        ("platform", 1)
+    ]
+    assert [(item.scope, item.version) for item in soika_migrations] == [("soika", 1)]
+    assert all(
+        len(item.checksum) == 64 for item in platform_migrations + soika_migrations
+    )
+    platform = platform_migrations[0].sql
+    soika = soika_migrations[0].sql
     assert "CREATE EXTENSION IF NOT EXISTS postgis" in platform
     assert "CREATE SCHEMA IF NOT EXISTS ga_core" in platform
     assert "CREATE SCHEMA IF NOT EXISTS ga_cache" in platform
     assert "geometry_json JSONB" in platform
+    assert "CREATE SCHEMA IF NOT EXISTS ga_soika" not in platform
     assert "CREATE SCHEMA IF NOT EXISTS ga_soika" in soika
     assert "ga_soika.geocoding_results" in soika
     assert "USING GIST(point)" in soika
