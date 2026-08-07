@@ -183,12 +183,12 @@ def _effective_weights(config: RiskScoringConfig) -> dict[str, float]:
     raw = [config.indicator_weights[name] for name in INDICATOR_NAMES]
     total = sum(raw)
     result: dict[str, float] = {}
-    allocated = 0.0
+    remaining = 1.0
     for name, value in zip(INDICATOR_NAMES[:-1], raw[:-1], strict=True):
-        weight = value / total
+        weight = min(max(value / total, 0.0), remaining)
         result[name] = weight
-        allocated += weight
-    result[INDICATOR_NAMES[-1]] = max(0.0, min(1.0, 1.0 - allocated))
+        remaining = max(0.0, remaining - weight)
+    result[INDICATOR_NAMES[-1]] = remaining
     return result
 
 
