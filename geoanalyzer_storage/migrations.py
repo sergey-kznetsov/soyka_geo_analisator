@@ -70,7 +70,11 @@ def discover_migrations(
         raise ValueError("migration package must be a non-empty module name")
     root = files(package).joinpath("sql", "migrations", scope)
     result: list[Migration] = []
-    for entry in root.iterdir():
+    try:
+        entries = tuple(root.iterdir())
+    except FileNotFoundError as error:
+        raise MigrationError(f"migration scope {scope!r} was not found") from error
+    for entry in entries:
         match = _MIGRATION_NAME.fullmatch(entry.name)
         if match is None:
             continue
@@ -103,7 +107,11 @@ class MigrationRunner:
             raise TypeError("database must be PostgresDatabase")
         self.database = database
         self.scope = application_id(scope)
-        resolved = tuple(migrations) if migrations is not None else discover_migrations(self.scope)
+        resolved = (
+            tuple(migrations)
+            if migrations is not None
+            else discover_migrations(self.scope)
+        )
         if any(item.scope != self.scope for item in resolved):
             raise ValueError("all migrations must match the runner scope")
         versions = [item.version for item in resolved]
