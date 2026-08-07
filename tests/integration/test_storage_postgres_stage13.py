@@ -47,26 +47,31 @@ def database() -> PostgresDatabase:
             max_pool_size=4,
         )
     )
-    MigrationRunner(database).apply()
+    MigrationRunner(database, scope="platform").apply()
+    MigrationRunner(database, scope="soika").apply()
     try:
         yield database
     finally:
         database.close()
 
 
-def test_migrations_are_transactional_and_idempotent(database: PostgresDatabase) -> None:
-    assert MigrationRunner(database).apply() == ()
+def test_migrations_are_transactional_scoped_and_idempotent(
+    database: PostgresDatabase,
+) -> None:
+    assert MigrationRunner(database, scope="platform").apply() == ()
+    assert MigrationRunner(database, scope="soika").apply() == ()
 
     with database.connection() as connection:
         versions = connection.execute(
-            "SELECT version FROM ga_meta.schema_migrations ORDER BY version"
+            "SELECT scope, version FROM ga_meta.schema_migrations "
+            "ORDER BY scope, version"
         ).fetchall()
         server_version = int(connection.execute("SHOW server_version_num").fetchone()[0])
         postgis_version = connection.execute(
             "SELECT postgis_lib_version()"
         ).fetchone()[0]
 
-    assert versions == [(1,), (2,)]
+    assert versions == [("platform", 1), ("soika", 1)]
     assert server_version // 10_000 == 18
     assert str(postgis_version).startswith("3.6")
 
