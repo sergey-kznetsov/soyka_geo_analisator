@@ -20,7 +20,8 @@ include = [
     "soika_uds/integration/schemas/v1/*.json",
     "soika_uds/parsers/schemas/*.json",
     "soika_uds/parsers/connectors/schemas/*.json",
-    "geoanalyzer_storage/sql/migrations/*.sql",
+    "geoanalyzer_storage/sql/migrations/platform/*.sql",
+    "geoanalyzer_storage/sql/migrations/soika/*.sql",
 ]
 
 [tool.poetry.dependencies]
