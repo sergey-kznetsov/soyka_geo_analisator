@@ -12,6 +12,7 @@ from soika_uds.events import (
     EventMessage,
     IdentityReductionBackend,
     ScopeStatus,
+    UMAPReductionBackend,
 )
 
 
@@ -125,7 +126,7 @@ def test_single_cluster_is_valid_and_explained() -> None:
     assert diagnostic.cluster_count == 1
 
 
-def test_no_clusters_is_a_normal_result_not_an_exception() -> None:
+def test_noise_is_diagnostic_only_even_when_include_noise_is_enabled() -> None:
     engine = EventClusteringEngine(
         embedder=ThemeEmbedder(),
         reducer=IdentityReductionBackend(),
@@ -134,6 +135,7 @@ def test_no_clusters_is_a_normal_result_not_an_exception() -> None:
             levels=(EventLevel.BUILDING,),
             min_scope_messages=4,
             min_event_size=2,
+            include_noise=True,
         ),
     )
     result = engine.cluster(_messages()[:4])
@@ -142,6 +144,14 @@ def test_no_clusters_is_a_normal_result_not_an_exception() -> None:
     assert result.stats.no_cluster_scopes == 1
     assert result.diagnostics[0].status is ScopeStatus.NO_CLUSTERS
     assert result.diagnostics[0].noise_count == 4
+    assert result.component_provenance["noise_event_policy"] == "diagnostics_only"
+
+
+def test_umap_small_scope_dimension_stays_below_spectral_limit() -> None:
+    backend = UMAPReductionBackend(n_components=5)
+    assert backend.effective_shape(3) == (2, 1)
+    assert backend.effective_shape(5) == (4, 3)
+    assert backend.effective_shape(6) == (5, 4)
 
 
 def test_insufficient_scope_and_missing_link_are_explicit() -> None:
