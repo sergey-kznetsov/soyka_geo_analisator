@@ -25,40 +25,10 @@ from .models import (
 _TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё][0-9A-Za-zА-Яа-яЁё-]+", re.UNICODE)
 _STOPWORDS = frozenset(
     {
-        "это",
-        "как",
-        "для",
-        "что",
-        "при",
-        "или",
-        "его",
-        "еще",
-        "ещё",
-        "нет",
-        "все",
-        "всё",
-        "она",
-        "они",
-        "оно",
-        "уже",
-        "так",
-        "там",
-        "тут",
-        "где",
-        "когда",
-        "очень",
-        "после",
-        "перед",
-        "через",
-        "from",
-        "with",
-        "that",
-        "this",
-        "have",
-        "has",
-        "the",
-        "and",
-        "for",
+        "это", "как", "для", "что", "при", "или", "его", "еще", "ещё",
+        "нет", "все", "всё", "она", "они", "оно", "уже", "так", "там",
+        "тут", "где", "когда", "очень", "после", "перед", "через", "from",
+        "with", "that", "this", "have", "has", "the", "and", "for",
     }
 )
 _LEVEL_ORDER = {level: index for index, level in enumerate(EventLevel)}
@@ -276,8 +246,7 @@ class EventClusteringEngine:
                 for message, label in zip(scoped, assignment.labels, strict=True):
                     if label == -1:
                         noise_count += 1
-                        if not self.config.include_noise:
-                            continue
+                        continue
                     grouped_labels.setdefault(label, []).append(message)
                 grouped_labels = {
                     label: members
@@ -353,6 +322,7 @@ class EventClusteringEngine:
             "scope_components": scope_components,
             "random_seed": self.config.random_seed,
             "mutable_topic_model_reuse": False,
+            "noise_event_policy": "diagnostics_only",
         }
         output_core = {
             "events": [item.to_dict() for item in events_tuple],
