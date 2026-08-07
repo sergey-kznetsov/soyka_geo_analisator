@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,6 +34,16 @@ from soika_uds.orchestration import (
     StageCheckpoint,
 )
 
+_RUN_TOKEN = uuid.uuid4().hex[:12]
+
+
+def _run_id(prefix: str) -> str:
+    return f"{prefix}-{_RUN_TOKEN}"
+
+
+def _run_namespace(prefix: str) -> str:
+    return f"{prefix}:{_RUN_TOKEN}"
+
 
 @pytest.fixture(scope="module")
 def database() -> PostgresDatabase:
@@ -42,7 +53,7 @@ def database() -> PostgresDatabase:
     database = PostgresDatabase(
         PostgresSettings(
             dsn=dsn,
-            application_name="stage13-integration",
+            application_name=f"stage13-integration-{_RUN_TOKEN}",
             min_pool_size=0,
             max_pool_size=4,
         )
@@ -64,7 +75,7 @@ def test_migrations_are_transactional_scoped_and_idempotent(
     with database.connection() as connection:
         versions = connection.execute(
             "SELECT scope, version FROM ga_meta.schema_migrations "
-            "ORDER BY scope, version"
+            "WHERE scope IN ('platform', 'soika') ORDER BY scope, version"
         ).fetchall()
         server_version = int(connection.execute("SHOW server_version_num").fetchone()[0])
         postgis_version = connection.execute(
@@ -99,8 +110,8 @@ def test_application_registry_is_shared_but_domain_schema_is_isolated(
 ) -> None:
     registry = PostgresApplicationRegistry(database)
     registration = ApplicationRegistration(
-        application_id="stage13-service",
-        domain_schema="ga_stage13_service",
+        application_id=_run_id("stage13-service"),
+        domain_schema=f"ga_stage13_{_RUN_TOKEN}",
     )
 
     registry.register(registration)
@@ -111,28 +122,31 @@ def test_application_registry_is_shared_but_domain_schema_is_isolated(
             (registration.application_id,),
         ).fetchone()
 
-    assert row == ("ga_stage13_service", True)
+    assert row == (f"ga_stage13_{_RUN_TOKEN}", True)
     assert registry.disable(registration.application_id) is True
 
 
 def test_postgres_cache_has_ttl_and_application_isolation(
     database: PostgresDatabase,
 ) -> None:
+    other_application = _run_id("other-service")
     with database.connection() as connection:
         connection.execute(
-            "INSERT INTO ga_meta.applications(application_id) VALUES ('other-service') "
-            "ON CONFLICT (application_id) DO NOTHING"
+            "INSERT INTO ga_meta.applications(application_id) VALUES (%s) "
+            "ON CONFLICT (application_id) DO NOTHING",
+            (other_application,),
         )
 
+    namespace = _run_namespace("osm.nominatim:v1")
     soika_cache = PostgresJsonCache(
         database,
         application="soika",
-        namespace="osm.nominatim:v1",
+        namespace=namespace,
     )
     other_cache = PostgresJsonCache(
         database,
-        application="other-service",
-        namespace="osm.nominatim:v1",
+        application=other_application,
+        namespace=namespace,
     )
     key = soika_cache.key("search", {"q": "Казань", "limit": 5})
     soika_cache.set(key, {"source": "soika"}, ttl_seconds=60)
@@ -180,7 +194,7 @@ def test_repeated_osm_lookup_uses_postgres_cache_without_redownload(
     cache = PostgresJsonCache(
         database,
         application="soika",
-        namespace="osm.nominatim:repeat-v1",
+        namespace=_run_namespace("osm.nominatim:repeat-v1"),
     )
     transport = _CountingTransport()
     mention = AddressMention(
@@ -234,7 +248,7 @@ def test_postgres_job_store_preserves_orchestrator_contract(
 ) -> None:
     store = PostgresJobStore(database)
     candidate = JobRecord.new(
-        _request("stage13-postgres-job"),
+        _request(_run_id("stage13-postgres-job")),
         datetime(2026, 8, 7, 9, 0, tzinfo=UTC),
     )
 
@@ -266,7 +280,7 @@ def test_postgres_job_store_preserves_orchestrator_contract(
 def test_completed_checkpoint_output_is_immutable_artifact(
     database: PostgresDatabase,
 ) -> None:
-    analysis_id = "stage13-checkpoint-artifact"
+    analysis_id = _run_id("stage13-checkpoint-artifact")
     store = PostgresJobStore(database)
     created = _create_job(database, analysis_id)
     completed = created.replace_checkpoint(
@@ -296,7 +310,7 @@ def test_completed_checkpoint_output_is_immutable_artifact(
 def test_immutable_artifact_round_trip_preserves_digest_and_postgis_geometry(
     database: PostgresDatabase,
 ) -> None:
-    analysis_id = "stage13-artifact-job"
+    analysis_id = _run_id("stage13-artifact-job")
     _create_job(database, analysis_id)
     store = PostgresArtifactStore(database)
     artifact = ArtifactRecord(
