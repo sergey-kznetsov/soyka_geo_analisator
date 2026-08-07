@@ -40,15 +40,16 @@ class RetentionManager:
         database: PostgresDatabase,
         *,
         application: str,
-        policy: RetentionPolicy = RetentionPolicy(),
+        policy: RetentionPolicy | None = None,
     ) -> None:
         if not isinstance(database, PostgresDatabase):
             raise TypeError("database must be PostgresDatabase")
-        if not isinstance(policy, RetentionPolicy):
+        resolved_policy = policy or RetentionPolicy()
+        if not isinstance(resolved_policy, RetentionPolicy):
             raise TypeError("policy must be RetentionPolicy")
         self.database = database
         self.application = application_id(application)
-        self.policy = policy
+        self.policy = resolved_policy
 
     def purge_expired_cache(self) -> int:
         with self.database.connection() as connection:
