@@ -12,6 +12,7 @@ from geoanalyzer_storage import (
     ArtifactRecord,
     BackupPolicy,
     BackupTarget,
+    MigrationRunner,
     PostgresDatabase,
     PostgresJsonCache,
     PostgresSettings,
@@ -117,6 +118,32 @@ def test_cli_applies_platform_before_dependent_scopes() -> None:
         "platform",
         "soika",
     )
+
+
+def test_migration_runner_honors_configured_lock_timeout() -> None:
+    database = PostgresDatabase(
+        PostgresSettings(
+            dsn="postgresql://example.invalid/test",
+            lock_timeout_ms=1_234,
+            min_pool_size=0,
+        )
+    )
+    runner = MigrationRunner(database, migrations=())
+    calls: list[tuple[str, tuple[str, ...] | None]] = []
+
+    class FakeConnection:
+        def execute(
+            self,
+            query: str,
+            params: tuple[str, ...] | None = None,
+        ) -> None:
+            calls.append((query, params))
+
+    runner._set_transaction_lock_timeout(FakeConnection())
+
+    assert calls == [
+        ("SELECT set_config('lock_timeout', %s, true)", ("1234ms",)),
+    ]
 
 
 def test_migrations_are_scoped_ordered_and_hash_pinned() -> None:
