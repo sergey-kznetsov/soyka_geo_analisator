@@ -126,7 +126,7 @@ jobs:
 
       - name: Apply and inspect storage migrations
         run: |
-          python -m geoanalyzer_storage.cli migrate
+          python -m geoanalyzer_storage.cli migrate --scope platform --scope soika
           python -m geoanalyzer_storage.cli check
 
       - name: Run live PostgreSQL PostGIS integration tests
