@@ -127,10 +127,17 @@ class MigrationRunner:
         ).fetchall()
         return {int(row[0]): (str(row[1]), str(row[2])) for row in rows}
 
+    def _set_transaction_lock_timeout(self, connection: Any) -> None:
+        timeout = f"{self.database.settings.lock_timeout_ms}ms"
+        connection.execute(
+            "SELECT set_config('lock_timeout', %s, true)",
+            (timeout,),
+        )
+
     def apply(self) -> tuple[Migration, ...]:
         applied_now: list[Migration] = []
         with self.database.connection() as connection, connection.transaction():
-            connection.execute("SET LOCAL lock_timeout = '5s'")
+            self._set_transaction_lock_timeout(connection)
             connection.execute(
                 "SELECT pg_advisory_xact_lock(%s)",
                 (_MIGRATION_LOCK_ID,),
