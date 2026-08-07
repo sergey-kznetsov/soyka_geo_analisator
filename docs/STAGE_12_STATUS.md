@@ -18,7 +18,7 @@ Dataset-relative min-max удалён. Нормализация использу
 
 Nested building/link/road/global events не увеличивают connectivity повторно: показатель основан на множестве уникальных внешних `message_ids`.
 
-Tolerance-accepted машинная погрешность суммы весов нормализуется в эффективный единичный бюджет до расчёта contributions. Поэтому итоговый score остаётся согласованным с суммой вкладов и ограниченным диапазоном `[0, 1]`.
+Tolerance-accepted машинная погрешность суммы весов нормализуется в эффективный единичный бюджет до расчёта contributions. Allocator использует монотонно уменьшающийся `remaining`, поэтому даже floating-point residual rounding не может сделать сумму эффективных весов больше 1. Итоговый score остаётся согласованным с суммой вкладов и ограниченным диапазоном `[0, 1]`.
 
 Формула, веса, references и thresholds версионированы и входят в `config_digest`. Версия пакета — `0.17.0`.
 
@@ -45,15 +45,16 @@ Tolerance-accepted машинная погрешность суммы весов
 
 ## Automated review
 
-Закрыты пять замечаний automated review:
+Закрыты шесть замечаний automated review:
 
 1. stale expert manifest больше не публикуется как эффективное одобрение текущей formula/configuration;
 2. выбор локальной проекции корректно работает для точек по разные стороны антимеридиана;
 3. публичный `RiskScoringEngine.score()` валидирует каждый элемент `events` как `EventCluster` до чтения `event_id` и сортировки;
 4. полярные metric calculations используют локальную Azimuthal Equidistant CRS, а не Web Mercator;
-5. tolerance-accepted веса нормализуются до единичного effective budget, поэтому saturated score не может выйти за `[0, 1]`.
+5. tolerance-accepted веса нормализуются до единичного effective budget, поэтому saturated score не может выйти за `[0, 1]`;
+6. residual allocator ограничивает каждый следующий effective weight текущим `remaining`, поэтому округление первых весов не может переполнить единичный бюджет.
 
-Все пять дефектов покрыты regression tests, review threads resolved.
+Все шесть дефектов покрыты regression tests, review threads resolved.
 
 ## Финальная проверка кодового head
 
@@ -61,13 +62,16 @@ GitHub Actions подтвердил:
 
 - Python compilation — passed;
 - Ruff — passed;
-- 260 deterministic unit/orchestration/regression tests — passed;
-- `poetry.lock` consistency — passed на предыдущем неизменённом dependency graph и повторно проверяется на финальном doc-head;
-- CPU/GPU container gate повторно проверяется на финальном doc-head.
+- 261 deterministic unit/orchestration/regression tests — passed;
+- `poetry.lock` consistency — passed;
+- CPU Docker image build — passed;
+- CPU container start — passed;
+- `/healthz` и `/readyz` — passed;
+- GPU target build — passed.
 
 ## Критерий
 
-Технический критерий этапа выполнен: один и тот же набор событий и точек даёт детерминированный, проверяемый и объяснимый результат независимо от порядка входа; связи используют точные идентификаторы и корректную CRS, нулевой диапазон нормализации не возникает, malformed public input обрабатывается контролируемо, веса не выводят score за единичный диапазон, а неизвестные данные не маскируются нулевым риском.
+Технический критерий этапа выполнен: один и тот же набор событий и точек даёт детерминированный, проверяемый и объяснимый результат независимо от порядка входа; связи используют точные идентификаторы и корректную CRS, нулевой диапазон нормализации не возникает, malformed public input обрабатывается контролируемо, floating-point округление весов не выводит score за единичный диапазон, а неизвестные данные не маскируются нулевым риском.
 
 Экспертная валидация остаётся внешним release-gate. Она принципиально не может быть закрыта кодом или автоматическим тестом без реального экспертного evidence.
 
