@@ -4,7 +4,7 @@
 
 ## Вход
 
-Scoring stage использует два уже подтверждённых checkpoint:
+Scoring stage использует два подтверждённых checkpoint:
 
 - `events.events.events` — события этапа 11;
 - `filtering.spatial_filtering.results` — точки сообщений для геометрии и метрических показателей.
@@ -13,42 +13,38 @@ Scoring stage использует два уже подтверждённых ch
 
 ## Связи между событиями
 
-Связь существует только если множества `message_ids` двух событий имеют непустое точное пересечение. Идентификаторы рассматриваются как целые строки, а не как последовательности символов.
+Связь существует только при непустом точном пересечении множеств `message_ids`. Идентификаторы рассматриваются как целые строки, не как последовательности символов.
 
-Для каждой связи сохраняются:
+Для связи сохраняются canonical event IDs, `shared_message_ids`, Jaccard index, тип связи, category/topic coincidence, temporal gap, GeoJSON geometry, исходная CRS, использованная метрическая CRS и `distance_m`.
 
-- canonical `source_event_id` и `target_event_id`;
-- `shared_message_ids` как отсортированный JSON-массив;
-- Jaccard index `|A ∩ B| / |A ∪ B|`;
-- тип `peer_overlap` либо `cross_level_overlap`;
-- совпадение категории и темы;
-- временной gap в часах, если временные границы доступны;
-- GeoJSON `LineString`;
-- исходная CRS линии `OGC:CRS84`;
-- метрическая CRS, использованная для расчёта расстояния;
-- `distance_m`.
+Расстояние основывается на WGS84 geodesic. Для локальных рёбер дополнительно используется локально центрированная Azimuthal Equidistant (`+proj=aeqd`) CRS через `pyproj.Transformer(..., always_xy=True)`. Для географически длинных рёбер остаётся WGS84 geodesic и `metric_crs=null`, поэтому одна локальная проекция не применяется глобально.
 
-GeoJSON-линия не переобъявляется как метрическая без преобразования. Координаты реально преобразуются через `pyproj.Transformer(..., always_xy=True)`. В диапазоне UTM используется локальная UTM-зона. Севернее 84° и южнее 80° применяется локально центрированная Azimuthal Equidistant (`+proj=aeqd`) CRS в метрах, поэтому Web Mercator не используется для полярных distance/spread расчётов. Для выбора локального центра долготы применяется circular mean, что сохраняет локальную геометрию при переходе через антимеридиан. В результат одновременно записываются исходная и метрическая CRS.
+При пересечении антимеридиана GeoJSON не записывается как один `LineString` от `179.x` к `-179.x`. Ребро разрезается на границе `+180/-180` и сериализуется как `MultiLineString`, поэтому визуальная геометрия соответствует короткому geodesic distance, а не проходит через всю карту.
+
+## Spatial spread
+
+Для набора точек сначала вычисляется spherical centroid и WGS84 geodesic расстояния до него.
+
+Если максимальный радиус не превышает 1 500 км, spread уточняется в локальной AEQD CRS. Это одинаково работает в обычных широтах, у полюсов и у антимеридиана.
+
+Если набор географически широкий, локальная проекция не используется: `spatial_spread` остаётся WGS84 geodesic, а `event_metric_crs` равен `null`. Поэтому валидные глобальные наборы, включая точки около `0°/180°`, не проходят через одну неподходящую UTM-зону и не дают non-finite координаты.
 
 ## Наблюдаемые показатели
 
-Формула использует четыре показателя. Каждый показатель хранится отдельно как `raw_value`, `reference_value`, `normalized_value`, `weight`, `contribution`, `status` и `reason`.
+Baseline 1.0.0 использует четыре показателя. Каждый хранится отдельно как `raw_value`, `reference_value`, `normalized_value`, `weight`, `contribution`, `status` и `reason`.
 
-`intensity` — число уникальных сообщений внутри события.
+- `intensity` — число уникальных сообщений события;
+- `persistence` — длительность между `started_at` и `ended_at` в часах;
+- `connectivity` — число уникальных внешних сообщений через связанные события;
+- `spatial_spread` — метрический географический разброс сообщений события.
 
-`persistence` — длительность события между `started_at` и `ended_at` в часах.
+Nested building/link/road/global events не удваивают connectivity: внешние `message_ids` объединяются множеством.
 
-`connectivity` — число уникальных внешних сообщений, доступных через связанные события. Сообщения текущего события вычитаются, а сообщения нескольких nested-level соседей объединяются множеством. Поэтому один и тот же набор сообщений на уровнях building/link/road/global не увеличивает показатель несколько раз.
+Legacy `population` и category `importance` не входят в baseline 1.0.0, поскольку текущий production-контракт не предоставляет квалифицированного population evidence, а legacy category weights не имеют подтверждённой экспертной валидации.
 
-`spatial_spread` — максимальное расстояние от метрического центроида события до его сообщений.
+## Нормализация и формула
 
-Legacy `population` и category `importance` не включены в baseline 1.0.0: текущий production-контракт этапа 11 не предоставляет квалифицированное population evidence, а legacy category weights не имеют зафиксированной экспертной валидации. Их добавление потребует новой версии формулы и нового expert-validation evidence.
-
-## Нормализация
-
-Dataset-relative min-max нормализация не используется. Она была причиной неопределённого результата при нулевом диапазоне `max == min`.
-
-Для каждого показателя применяется:
+Dataset-relative min-max не используется. Для каждого показателя применяется:
 
 `normalized = min(1, raw_value / fixed_positive_reference)`
 
@@ -59,24 +55,13 @@ Baseline references:
 - connectivity — 20 уникальных внешних сообщений;
 - spatial spread — 2000 метров.
 
-References являются частью `RiskScoringConfig`, валидируются как конечные положительные числа и входят в `config_digest`. Нулевой denominator поэтому запрещён контрактом.
-
-## Формула baseline 1.0.0
-
-Технический baseline использует равные веса:
-
-- intensity — 0.25;
-- persistence — 0.25;
-- connectivity — 0.25;
-- spatial spread — 0.25.
-
-Формула:
+Baseline weights равны `0.25` для каждого показателя. Формула:
 
 `score = Σ(weight_i × normalized_i)`
 
-Вес каждого показателя и его contribution присутствуют в результате. Конфигурация допускает только машинную погрешность суммы весов около 1.0; перед расчётом contributions эти tolerance-accepted веса детерминированно нормализуются в эффективный единичный бюджет. Поэтому сумма вкладов и итоговый score остаются согласованными и не выходят за `[0, 1]`.
+`RiskScoringConfig` допускает только машинную погрешность суммы весов около 1.0. Перед расчётом contributions веса детерминированно переводятся в effective unit budget через монотонно уменьшающийся `remaining`. Поэтому floating-point residual не может сделать сумму эффективных весов больше 1, а score остаётся согласованным с contributions и ограниченным `[0, 1]`.
 
-Baseline bands:
+Bands:
 
 - `low`: score < 0.25;
 - `medium`: 0.25 ≤ score < 0.50;
@@ -84,71 +69,49 @@ Baseline bands:
 - `critical`: score ≥ 0.75;
 - `unavailable`: хотя бы одно обязательное наблюдение отсутствует.
 
-Эти thresholds и веса являются версионированным техническим baseline, а не доказанными социальными или управленческими порогами.
+Эти references, thresholds и weights являются техническим baseline, а не доказанными социальными или управленческими порогами.
 
 ## Отсутствующие данные
 
-Отсутствие данных никогда не преобразуется в ноль.
-
-Если невозможно получить временные границы или полный набор точек сообщения, соответствующий indicator получает `status=missing`, `raw_value=null`, `normalized_value=null`, `contribution=null`. Итоговый `score` становится `null`, а band — `unavailable`.
-
-Таким образом неизвестный риск не становится искусственно низким.
+Отсутствие данных не преобразуется в ноль. Если нет временных границ либо полного набора точек, соответствующий indicator получает `status=missing`, а итоговый `score=null`, `band=unavailable`.
 
 ## Экспертная валидация
 
-`ExpertValidationManifest` связывает экспертный акт с конкретными:
+`ExpertValidationManifest` связывает экспертный акт с `formula_version`, `config_digest`, `review_id`, ролью, датой, SHA-256 evidence и исходным решением `approved`.
 
-- `formula_version`;
-- `config_digest`;
-- `review_id`;
-- ролью эксперта;
-- датой проверки;
-- SHA-256 evidence;
-- исходным решением эксперта `approved`.
-
-Manifest сам по себе не включает decision-use. `RiskScoringEngine` принимает отдельный `expert_validation_verifier`, который должен проверить внешнее evidence в доверенной инфраструктуре. `decision_use_approved=true` возможно только при одновременном выполнении всех условий:
+Manifest сам по себе не разрешает decision-use. `decision_use_approved=true` возможно только при одновременном выполнении условий:
 
 - manifest имеет `approved=true`;
-- `formula_version` совпадает с выполняемой формулой;
-- `config_digest` совпадает с выполняемой конфигурацией;
-- внешний verifier настроен;
+- `formula_version` и `config_digest` совпадают с текущей конфигурацией;
+- внешний `expert_validation_verifier` настроен;
 - verifier подтвердил evidence.
 
-`formula_validation.approved` всегда означает эффективное разрешение для текущего запуска. Исходное решение manifest хранится отдельно в `manifest_approved`. Поэтому устаревший manifest с `approved=true` не может выглядеть применимым к новой конфигурации.
+`formula_validation.approved` отражает только эффективный текущий gate. Исходное решение хранится отдельно в `manifest_approved`, поэтому stale manifest не может выглядеть применимым.
 
-В репозитории не подделывается экспертное заключение. До предоставления реального внешнего expert evidence и verifier baseline рассчитывается для технической проверки и воспроизводимости, но handler выдаёт warning `RISK_FORMULA_NOT_EXPERT_VALIDATED`, а результат содержит `decision_use_approved=false`.
-
-Изменение веса, reference, threshold или формулы меняет `config_digest` и требует нового экспертного подтверждения.
+До реального внешнего expert evidence `decision_use_approved=false`, а handler выдаёт `RISK_FORMULA_NOT_EXPERT_VALIDATED`.
 
 ## Воспроизводимость
 
-Перед расчётом входной массив сначала валидируется как коллекция `EventCluster`, затем события сортируются по `event_id`; рёбра сортируются по паре event IDs, а наборы сообщений — по полным identifiers. Публичные ключи `message_points` также валидируются как непустые строки до сортировки и digest. Результат содержит:
-
-- schema version;
-- algorithm version;
-- formula version;
-- input/config/output SHA-256 digests;
-- эффективное formula-validation состояние;
-- provenance способа построения связей, нормализации весов и CRS.
+Public input сначала валидируется, затем сортируется. Events сортируются по `event_id`, рёбра — по event IDs, наборы сообщений — по полным identifiers. `message_points` требуют непустых строковых ключей. Результат содержит schema/algorithm/formula versions, input/config/output SHA-256 digests, formula-validation metadata и provenance spatial/weight policies.
 
 Один и тот же набор событий и точек даёт одинаковый результат независимо от порядка входных коллекций.
 
-## Проверяемые legacy и boundary-дефекты
+## Regression gates
 
-Regression tests отдельно блокируют:
+Тесты блокируют:
 
 - посимвольное пересечение строковых `message_ids`;
-- фиктивное назначение CRS линии без coordinate transform;
-- искажение антимеридиана арифметическим средним долгот;
-- использование Web Mercator для полярных метрических расчётов;
-- деление на ноль dataset-relative min-max;
-- runtime overflow score при tolerance-accepted сумме весов;
+- фиктивное назначение CRS без coordinate transform;
+- неверный центр у антимеридиана;
+- несогласованный `LineString` через ±180°;
+- Web Mercator/неподходящую локальную проекцию у полюсов;
+- одну локальную проекцию для глобально широкого события;
+- dataset-relative min-max и zero-range division;
+- score overflow из-за tolerance/residual floating-point весов;
 - двойной учёт nested events;
-- трактовку отсутствующего observation как нулевого риска;
-- невалидную сумму весов и неупорядоченные thresholds;
-- stale expert approval для изменённой конфигурации;
-- включение decision-use без внешнего evidence verifier;
-- чтение `event_id` у malformed public input до проверки типа;
+- трактовку missing observation как нулевого риска;
+- stale expert approval и decision-use без evidence verifier;
+- чтение `event_id` у malformed input до проверки типа;
 - зависимость результата от порядка входа.
 
 ## Граница этапа
