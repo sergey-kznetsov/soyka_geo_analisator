@@ -80,18 +80,15 @@ class PostgresArtifactStore:
     def put(self, artifact: ArtifactRecord) -> bool:
         if not isinstance(artifact, ArtifactRecord):
             raise TypeError("artifact must be ArtifactRecord")
-        geometry_json = (
-            canonical_json(dict(artifact.geometry))
-            if artifact.geometry is not None
-            else None
-        )
+        geometry = dict(artifact.geometry) if artifact.geometry is not None else None
+        geometry_text = canonical_json(geometry) if geometry is not None else None
         with self.database.connection() as connection:
             row = connection.execute(
                 "INSERT INTO ga_core.artifacts("
                 "application_id, analysis_id, artifact_type, artifact_key, "
                 "content_digest, schema_version, producer_version, source_stage, "
-                "payload, geometry) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, "
+                "payload, geometry_json, geometry) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
                 "CASE WHEN %s IS NULL THEN NULL ELSE "
                 "ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326) END) "
                 "ON CONFLICT DO NOTHING RETURNING content_digest",
@@ -105,8 +102,9 @@ class PostgresArtifactStore:
                     artifact.producer_version,
                     artifact.source_stage,
                     self._jsonb(dict(artifact.payload)),
-                    geometry_json,
-                    geometry_json,
+                    self._jsonb(geometry) if geometry is not None else None,
+                    geometry_text,
+                    geometry_text,
                 ),
             ).fetchone()
         return row is not None
@@ -126,8 +124,7 @@ class PostgresArtifactStore:
         with self.database.connection() as connection:
             row = connection.execute(
                 "SELECT payload, schema_version, producer_version, source_stage, "
-                "CASE WHEN geometry IS NULL THEN NULL "
-                "ELSE ST_AsGeoJSON(geometry)::jsonb END "
+                "geometry_json, content_digest "
                 "FROM ga_core.artifacts "
                 "WHERE application_id = %s AND analysis_id = %s "
                 "AND artifact_type = %s AND artifact_key = %s "
@@ -136,7 +133,7 @@ class PostgresArtifactStore:
             ).fetchone()
         if row is None:
             return None
-        return ArtifactRecord(
+        artifact = ArtifactRecord(
             application_id=application,
             analysis_id=analysis_id,
             artifact_type=artifact_type,
@@ -147,6 +144,9 @@ class PostgresArtifactStore:
             source_stage=row[3],
             geometry=row[4],
         )
+        if artifact.content_digest != row[5]:
+            raise ValueError("persisted artifact digest does not match stored content")
+        return artifact
 
 
 __all__ = ["ArtifactRecord", "PostgresArtifactStore"]
