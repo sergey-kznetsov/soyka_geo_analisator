@@ -64,6 +64,7 @@ class PostgresDatabase:
                 f"SET statement_timeout = {self.settings.statement_timeout_ms}"
             )
             cursor.execute(f"SET lock_timeout = {self.settings.lock_timeout_ms}")
+        connection.commit()
 
     @property
     def pool(self) -> Any:
