@@ -1,30 +1,45 @@
 # Этап 11: события и тематическая кластеризация
 
-Статус: реализация завершена в ветке, финальная CI-проверка выполняется.
+Статус: завершён 7 августа 2026 года.
 
-Geo Analyzer 2 не изменяется.
+Geo Analyzer 2 не изменялся.
 
-## Реализовано
+## Результат
 
-- отдельный пакет `soika_uds.events`;
-- production handler `PipelineStage.EVENTS`;
-- строгий join preprocessing/classification/geolocation/filtering по `message_key`;
-- уровни `building`, `link`, `road`, `global`;
-- разделённые embedding, dimensionality reduction и clustering interfaces;
-- embeddings рассчитываются один раз, mutable topic model между scopes не переиспользуется;
-- новый UMAP/HDBSCAN создаётся для каждого scope;
-- фиксированный random seed;
-- explicit minimum scope/event sizes;
-- штатная обработка одного кластера, отсутствия кластеров и insufficient data;
-- `message_ids` сохраняются JSON-массивами;
-- event ID и все digests детерминированы;
-- объяснение состава каждого события;
-- разные темы по одному адресу не объединяются только по spatial identity;
-- risk/connections исключены из этапа 11 и оставлены этапу 12;
-- версия пакета `0.16.0`.
+Реализован отдельный production-контур `soika_uds.events` и handler `PipelineStage.EVENTS`. Контур строго объединяет preprocessing, classification, geolocation и spatial filtering по `message_key`; к кластеризации допускаются только сообщения, прошедшие пространственный gate.
+
+## Кластеризация
+
+Поддерживаются независимые уровни `building`, `link`, `road` и `global`. Совпадение spatial identity само по себе не создаёт событие: сообщения одного объекта дополнительно должны попасть в один семантический кластер и достигнуть `min_event_size`.
+
+Embedding, dimensionality reduction и clustering разделены интерфейсами. Embeddings вычисляются один раз на сообщение, а reduction/clustering создаются независимо для каждого scope. Изменяемая BERTopic-модель между объектами не переиспользуется. UMAP получает фиксированный `random_state`, HDBSCAN создаётся заново для каждого scope и явно поддерживает `allow_single_cluster`.
+
+Минимальный объём задаётся конфигурацией. Один кластер является штатным результатом; отсутствие кластеров, недостаточный объём и отсутствующий spatial scope представлены отдельными diagnostics, а не исключениями.
+
+## Контракты и воспроизводимость
+
+`message_ids` сохраняются как отсортированные уникальные JSON-массивы. Event ID строится из SHA-256 версии алгоритма, уровня, object ID и состава сообщений. Результат фиксирует schema/algorithm version, config/input/output digests и provenance вычислительных компонентов.
+
+Одинаковый набор входных сообщений и одинаковые компоненты дают одинаковые event IDs, состав и output digest независимо от порядка входа. Regression test отдельно подтверждает, что две разные темы по одному адресу не сливаются в одно событие.
+
+Risk, связи между событиями и итоговый score не входят в этап 11 и остаются ответственностью этапа 12.
+
+## Проверки
+
+На полном quality workflow подтверждены:
+
+- Python compilation — passed;
+- Ruff — passed;
+- 241 deterministic unit/orchestration tests — passed;
+- `poetry.lock` consistency — passed;
+- CPU Docker build/start — passed;
+- `/healthz` и `/readyz` — passed;
+- GPU target build — passed.
 
 ## Критерий завершения
 
-Критерий будет подтверждён после успешных Python compilation, Ruff, полного deterministic unit suite, dependency-lock, CPU Docker health/readiness, GPU target build и закрытия всех review threads.
+Критерий этапа выполнен: события не объединяются только по адресу, минимальный объём и крайние случаи обрабатываются явно, а фиксированный вход воспроизводится независимо от порядка обработки.
+
+Следующий активный этап: этап 12 — связи, показатели и риск.
 
 Подробности: `docs/EVENT_CLUSTERING.md`.
