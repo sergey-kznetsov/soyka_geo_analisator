@@ -43,12 +43,13 @@ Nested building/link/road/global events не увеличивают connectivity
 
 ## Automated review
 
-Закрыты оба замечания automated review:
+Закрыты три замечания automated review:
 
 1. stale expert manifest больше не публикуется как эффективное одобрение текущей formula/configuration;
-2. выбор локальной проекции корректно работает для точек по разные стороны антимеридиана.
+2. выбор локальной проекции корректно работает для точек по разные стороны антимеридиана;
+3. публичный `RiskScoringEngine.score()` валидирует каждый элемент `events` как `EventCluster` до чтения `event_id` и сортировки, поэтому malformed input возвращает контролируемый `TypeError`, а не `AttributeError`.
 
-Оба дефекта покрыты отдельными regression tests, review threads resolved.
+Все три дефекта покрыты regression tests, review threads resolved.
 
 ## Финальная проверка кодового head
 
@@ -56,7 +57,7 @@ GitHub Actions подтвердил:
 
 - Python compilation — passed;
 - Ruff — passed;
-- 257 deterministic unit/orchestration/regression tests — passed;
+- 258 deterministic unit/orchestration/regression tests — passed;
 - `poetry.lock` consistency — passed;
 - CPU Docker image build — passed;
 - CPU container start — passed;
@@ -65,7 +66,7 @@ GitHub Actions подтвердил:
 
 ## Критерий
 
-Технический критерий этапа выполнен: один и тот же набор событий и точек даёт детерминированный, проверяемый и объяснимый результат независимо от порядка входа; связи используют точные идентификаторы и корректную CRS, нулевой диапазон нормализации не возникает, а неизвестные данные не маскируются нулевым риском.
+Технический критерий этапа выполнен: один и тот же набор событий и точек даёт детерминированный, проверяемый и объяснимый результат независимо от порядка входа; связи используют точные идентификаторы и корректную CRS, нулевой диапазон нормализации не возникает, malformed public input обрабатывается контролируемо, а неизвестные данные не маскируются нулевым риском.
 
 Экспертная валидация остаётся внешним release-gate. Она принципиально не может быть закрыта кодом или автоматическим тестом без реального экспертного evidence.
 
