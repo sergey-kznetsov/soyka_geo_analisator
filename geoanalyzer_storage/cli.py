@@ -7,6 +7,7 @@ import json
 import os
 from collections.abc import Sequence
 
+from .contracts import application_id
 from .migrations import MigrationRunner, discover_migrations
 from .postgres import PostgresDatabase, PostgresSettings
 from .retention import RetentionManager, RetentionPolicy
@@ -24,8 +25,15 @@ def _database(args: argparse.Namespace) -> PostgresDatabase:
     )
 
 
+def _ordered_scopes(values: Sequence[str] | None) -> tuple[str, ...]:
+    requested = tuple(application_id(value) for value in (values or ("platform",)))
+    result = ["platform"]
+    result.extend(scope for scope in requested if scope != "platform")
+    return tuple(dict.fromkeys(result))
+
+
 def _migrate(args: argparse.Namespace) -> int:
-    scopes = tuple(args.scopes or ("platform",))
+    scopes = _ordered_scopes(args.scopes)
     applied = []
     with _database(args) as database:
         for scope in scopes:
@@ -120,7 +128,10 @@ def _parser() -> argparse.ArgumentParser:
         "--scope",
         dest="scopes",
         action="append",
-        help="migration scope to apply; repeat for multiple scopes (default: platform)",
+        help=(
+            "migration scope to apply; repeat for multiple scopes. "
+            "platform is always applied first"
+        ),
     )
     migrate.set_defaults(handler=_migrate)
 
