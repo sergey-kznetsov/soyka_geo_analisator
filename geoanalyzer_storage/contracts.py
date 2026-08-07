@@ -49,7 +49,7 @@ def _json_value(value: object, field_name: str) -> Any:
                 raise ValueError(f"{field_name} keys must be strings")
             result[key] = _json_value(item, f"{field_name}.{key}")
         return result
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [
             _json_value(item, f"{field_name}[{index}]")
             for index, item in enumerate(value)
