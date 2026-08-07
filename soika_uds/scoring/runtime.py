@@ -90,6 +90,18 @@ def _point(value: object, name: str) -> GeoPoint | None:
     return GeoPoint(longitude=coordinates[0], latitude=coordinates[1])
 
 
+def _longitude_center(longitudes: Sequence[float]) -> float:
+    """Return a wrapped circular longitude center in [-180, 180]."""
+    if not longitudes:
+        raise ValueError("longitude center requires at least one value")
+    sin_sum = sum(math.sin(math.radians(value)) for value in longitudes)
+    cos_sum = sum(math.cos(math.radians(value)) for value in longitudes)
+    if math.hypot(sin_sum, cos_sum) < 1e-12:
+        return float(longitudes[0])
+    result = math.degrees(math.atan2(sin_sum, cos_sum))
+    return 180.0 if math.isclose(result, -180.0, abs_tol=1e-12) else result
+
+
 def _metric_crs(longitude: float, latitude: float) -> str:
     if -80.0 <= latitude <= 84.0:
         zone = min(60, max(1, int((longitude + 180.0) // 6.0) + 1))
@@ -100,7 +112,7 @@ def _metric_crs(longitude: float, latitude: float) -> str:
 def _projected_points(
     points: Sequence[GeoPoint],
 ) -> tuple[str, tuple[tuple[float, float], ...]]:
-    longitude = sum(item.longitude for item in points) / len(points)
+    longitude = _longitude_center(tuple(item.longitude for item in points))
     latitude = sum(item.latitude for item in points) / len(points)
     metric_crs = _metric_crs(longitude, latitude)
     transformer = Transformer.from_crs(SOURCE_CRS, metric_crs, always_xy=True)
@@ -139,7 +151,7 @@ def _connection_geometry(
 ) -> tuple[Mapping[str, Any] | None, str | None, float | None]:
     if left is None or right is None:
         return None, None, None
-    midpoint_lon = (left.longitude + right.longitude) / 2.0
+    midpoint_lon = _longitude_center((left.longitude, right.longitude))
     midpoint_lat = (left.latitude + right.latitude) / 2.0
     metric_crs = _metric_crs(midpoint_lon, midpoint_lat)
     transformer = Transformer.from_crs(SOURCE_CRS, metric_crs, always_xy=True)
@@ -438,6 +450,7 @@ class RiskScoringEngine:
             "connection_weight": "jaccard_index",
             "line_source_crs": SOURCE_CRS,
             "line_distance_method": "pyproj_always_xy_to_local_utm_or_epsg3857",
+            "longitude_center_method": "circular_mean",
             "event_metric_crs": metric_crs_by_event,
             "dataset_relative_minmax": False,
             "zero_range_policy": "fixed_positive_references_remove_zero_range_division",
