@@ -49,14 +49,28 @@ def test_polar_points_use_local_azimuthal_equidistant_metric_crs() -> None:
     assert result.provenance["polar_metric_crs"] == "local_azimuthal_equidistant"
 
 
-def test_accepted_weight_tolerance_is_normalized_to_unit_sum() -> None:
-    config = RiskScoringConfig(
-        indicator_weights={
+@pytest.mark.parametrize(
+    "weights",
+    [
+        {
             "intensity": 0.1,
             "persistence": 0.2,
             "connectivity": 0.3,
             "spatial_spread": 0.4000000005,
         },
+        {
+            "intensity": 0.06,
+            "persistence": 0.57,
+            "connectivity": 0.37,
+            "spatial_spread": 0.0,
+        },
+    ],
+)
+def test_accepted_weight_tolerance_is_normalized_to_unit_sum(
+    weights: dict[str, float],
+) -> None:
+    config = RiskScoringConfig(
+        indicator_weights=weights,
         intensity_reference_messages=1,
         persistence_reference_hours=1,
         connectivity_reference_messages=1,
@@ -76,7 +90,9 @@ def test_accepted_weight_tolerance_is_normalized_to_unit_sum() -> None:
 
     assert result.event_scores[0].score == pytest.approx(1.0)
     assert result.event_scores[1].score == pytest.approx(1.0)
-    assert sum(item.weight for item in result.event_scores[0].indicators) == pytest.approx(1.0)
+    effective_weights = [item.weight for item in result.event_scores[0].indicators]
+    assert sum(effective_weights) <= 1.0
+    assert sum(effective_weights) == pytest.approx(1.0)
     assert result.provenance["weight_policy"] == (
         "normalize_tolerance_accepted_weights_to_unit_sum"
     )
