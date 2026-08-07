@@ -106,7 +106,10 @@ def _metric_crs(longitude: float, latitude: float) -> str:
     if -80.0 <= latitude <= 84.0:
         zone = min(60, max(1, int((longitude + 180.0) // 6.0) + 1))
         return f"EPSG:{32600 + zone if latitude >= 0.0 else 32700 + zone}"
-    return "EPSG:3857"
+    return (
+        f"+proj=aeqd +lat_0={latitude:.12g} +lon_0={longitude:.12g} "
+        "+datum=WGS84 +units=m +no_defs +type=crs"
+    )
 
 
 def _projected_points(
@@ -360,7 +363,11 @@ class RiskScoringEngine:
                 )
             )
         complete = all(item.status is IndicatorStatus.OBSERVED for item in indicators)
-        score = sum(item.contribution or 0.0 for item in indicators) if complete else None
+        score = (
+            min(1.0, sum(item.contribution or 0.0 for item in indicators))
+            if complete
+            else None
+        )
         band = _band(score, self.config) if score is not None else RiskBand.UNAVAILABLE
         return EventRiskScore(
             event_id=event.event_id,
@@ -372,6 +379,7 @@ class RiskScoringEngine:
             explanation={
                 "formula": "sum(weight_i * normalized_indicator_i)",
                 "normalization": "min(1, raw_value / fixed_reference)",
+                "score_bounds": "aggregate_clamped_to_unit_interval",
                 "missing_data_policy": "score_unavailable_not_zero",
                 "nested_event_policy": "connectivity_counts_unique_external_message_ids",
                 "connection_count": len(neighbor_ids),
@@ -450,11 +458,13 @@ class RiskScoringEngine:
             "connection_evidence": "exact_message_id_set_intersection",
             "connection_weight": "jaccard_index",
             "line_source_crs": SOURCE_CRS,
-            "line_distance_method": "pyproj_always_xy_to_local_utm_or_epsg3857",
+            "line_distance_method": "pyproj_always_xy_to_local_metric_crs",
+            "polar_metric_crs": "local_azimuthal_equidistant",
             "longitude_center_method": "circular_mean",
             "event_metric_crs": metric_crs_by_event,
             "dataset_relative_minmax": False,
             "zero_range_policy": "fixed_positive_references_remove_zero_range_division",
+            "score_bounds_policy": "aggregate_clamped_to_unit_interval",
             "decision_use_approved": decision_use_approved,
         }
         output_core = {
