@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any
@@ -87,10 +87,8 @@ class PostgresDatabase:
         try:
             pool.open(wait=True)
         except BaseException:
-            try:
+            with suppress(Exception):
                 pool.close()
-            except Exception:
-                pass
             raise
         return pool
 
