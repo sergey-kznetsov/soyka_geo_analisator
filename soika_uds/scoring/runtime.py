@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import combinations
@@ -178,13 +178,57 @@ def _band(score: float, config: RiskScoringConfig) -> RiskBand:
 class RiskScoringEngine:
     config: RiskScoringConfig = field(default_factory=RiskScoringConfig)
     expert_validation: ExpertValidationManifest | None = None
+    expert_validation_verifier: Callable[[ExpertValidationManifest], bool] | None = None
+
+    def _validation_state(self) -> dict[str, Any]:
+        manifest = self.expert_validation
+        verifier = self.expert_validation_verifier
+        if manifest is None:
+            return {
+                "approved": False,
+                "manifest_approved": False,
+                "manifest_matches_current_config": False,
+                "external_verifier_configured": verifier is not None,
+                "external_verification_passed": False,
+                "status": "expert_validation_missing",
+                "formula_version": self.config.formula_version,
+                "config_digest": self.config.digest,
+            }
+        manifest_payload = manifest.to_dict()
+        manifest_matches = (
+            manifest.formula_version == self.config.formula_version
+            and manifest.config_digest == self.config.digest
+        )
+        verifier_passed = False
+        if manifest.approved and manifest_matches and verifier is not None:
+            try:
+                verifier_passed = verifier(manifest) is True
+            except Exception:
+                verifier_passed = False
+        approved = manifest.approved and manifest_matches and verifier_passed
+        if approved:
+            status = "approved_for_decision_use"
+        elif not manifest.approved:
+            status = "expert_manifest_not_approved"
+        elif not manifest_matches:
+            status = "expert_manifest_stale"
+        elif verifier is None:
+            status = "external_verifier_missing"
+        else:
+            status = "external_verification_failed"
+        return {
+            **manifest_payload,
+            "approved": approved,
+            "manifest_approved": manifest.approved,
+            "manifest_matches_current_config": manifest_matches,
+            "external_verifier_configured": verifier is not None,
+            "external_verification_passed": verifier_passed,
+            "status": status,
+        }
 
     @property
     def decision_use_approved(self) -> bool:
-        return (
-            self.expert_validation is not None
-            and self.expert_validation.validates(self.config)
-        )
+        return bool(self._validation_state()["approved"])
 
     def _connections(
         self,
@@ -241,6 +285,8 @@ class RiskScoringEngine:
         connections: Sequence[EventConnection],
         spread_m: float | None,
         missing_points: Sequence[str],
+        *,
+        decision_use_approved: bool,
     ) -> EventRiskScore:
         neighbor_ids: set[str] = set()
         for connection in connections:
@@ -310,7 +356,7 @@ class RiskScoringEngine:
             score=score,
             band=band,
             formula_version=self.config.formula_version,
-            decision_use_approved=self.decision_use_approved,
+            decision_use_approved=decision_use_approved,
             explanation={
                 "formula": "sum(weight_i * normalized_indicator_i)",
                 "normalization": "min(1, raw_value / fixed_reference)",
@@ -319,7 +365,7 @@ class RiskScoringEngine:
                 "connection_count": len(neighbor_ids),
                 "connected_unique_external_messages": len(external_message_ids),
                 "missing_message_points": list(missing_points),
-                "formula_expert_validated": self.decision_use_approved,
+                "formula_expert_validated": decision_use_approved,
             },
         )
 
@@ -338,6 +384,9 @@ class RiskScoringEngine:
             raise ValueError("event_id values must be unique")
         if not isinstance(message_points, Mapping):
             raise TypeError("message_points must be an object")
+        for key in message_points:
+            if not isinstance(key, str) or not key.strip():
+                raise ValueError("message_points keys must be non-empty strings")
 
         centroids: dict[str, GeoPoint | None] = {}
         spreads: dict[str, float | None] = {}
@@ -351,6 +400,8 @@ class RiskScoringEngine:
             metric_crs_by_event[event.event_id] = metric_crs
 
         connections = self._connections(ordered, centroids)
+        validation = self._validation_state()
+        decision_use_approved = bool(validation["approved"])
         events_by_id = {item.event_id: item for item in ordered}
         scores = tuple(
             self._score_event(
@@ -359,6 +410,7 @@ class RiskScoringEngine:
                 connections,
                 spreads[event.event_id],
                 missing_points[event.event_id],
+                decision_use_approved=decision_use_approved,
             )
             for event in ordered
         )
@@ -374,16 +426,6 @@ class RiskScoringEngine:
                 if key in unique_message_set
             },
         }
-        validation = (
-            self.expert_validation.to_dict()
-            if self.expert_validation is not None
-            else {
-                "approved": False,
-                "status": "expert_validation_missing",
-                "formula_version": self.config.formula_version,
-                "config_digest": self.config.digest,
-            }
-        )
         stats = ScoringStats(
             events=len(ordered),
             connections=len(connections),
@@ -399,7 +441,7 @@ class RiskScoringEngine:
             "event_metric_crs": metric_crs_by_event,
             "dataset_relative_minmax": False,
             "zero_range_policy": "fixed_positive_references_remove_zero_range_division",
-            "decision_use_approved": self.decision_use_approved,
+            "decision_use_approved": decision_use_approved,
         }
         output_core = {
             "connections": [item.to_dict() for item in connections],
