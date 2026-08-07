@@ -116,14 +116,20 @@ class RiskScoringStageHandler:
                 str(error) or type(error).__name__,
             ) from error
         warnings: list[ContractIssue] = []
-        if not self.engine.decision_use_approved:
+        if result.formula_validation.get("approved") is not True:
             warnings.append(
                 ContractIssue(
                     code="RISK_FORMULA_NOT_EXPERT_VALIDATED",
-                    message="risk formula has no matching approved expert validation manifest",
+                    message=(
+                        "risk formula has no effective expert validation for "
+                        "the current formula/configuration and verified evidence"
+                    ),
                     retryable=False,
                     stage=PipelineStage.SCORING.value,
-                    details={"formula_version": self.engine.config.formula_version},
+                    details={
+                        "formula_version": self.engine.config.formula_version,
+                        "validation_status": result.formula_validation.get("status"),
+                    },
                 )
             )
         if result.stats.unavailable_scores:
