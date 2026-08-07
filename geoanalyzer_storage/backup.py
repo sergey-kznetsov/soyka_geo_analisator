@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
-_SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,63}$")
+
+def _argument(value: object, name: str) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise ValueError(f"{name} must be a non-empty argument without NUL bytes")
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,9 +21,7 @@ class BackupTarget:
 
     def __post_init__(self) -> None:
         for name in ("host", "database", "user"):
-            value = getattr(self, name)
-            if not isinstance(value, str) or _SAFE_NAME.fullmatch(value) is None:
-                raise ValueError(f"{name} contains unsupported characters")
+            object.__setattr__(self, name, _argument(getattr(self, name), name))
         if type(self.port) is not int or not 1 <= self.port <= 65535:
             raise ValueError("port must be in [1, 65535]")
 
