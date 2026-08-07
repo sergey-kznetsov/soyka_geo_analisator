@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from geoanalyzer_storage import PostgresDatabase, application_id
+from geoanalyzer_storage import PostgresDatabase, application_id, digest_json
 
 from .models import ConcurrentUpdateError, JobNotFoundError, JobRecord
 from .store import _migrate_legacy_checkpoints
@@ -70,9 +70,40 @@ class PostgresJobStore:
         self._sync_checkpoints(connection, record)
         return row[0]
 
+    def _sync_stage_artifact(
+        self,
+        connection: Any,
+        record: JobRecord,
+        *,
+        stage: str,
+        state: str,
+        output: dict[str, Any],
+    ) -> None:
+        if state != "completed":
+            return
+        content_digest = digest_json({"payload": output, "geometry": None})
+        connection.execute(
+            "INSERT INTO ga_core.artifacts("
+            "application_id, analysis_id, artifact_type, artifact_key, "
+            "content_digest, source_stage, payload) "
+            "VALUES (%s, %s, 'stage-output', %s, %s, %s, %s) "
+            "ON CONFLICT DO NOTHING",
+            (
+                self.application,
+                record.analysis_id,
+                stage,
+                content_digest,
+                stage,
+                self._jsonb(output),
+            ),
+        )
+
     def _sync_checkpoints(self, connection: Any, record: JobRecord) -> None:
         for checkpoint in record.checkpoints:
             payload = checkpoint.to_dict()
+            output = payload.get("output", {})
+            if not isinstance(output, dict):
+                raise ValueError("checkpoint output must be an object")
             connection.execute(
                 "INSERT INTO ga_core.stage_checkpoints("
                 "application_id, analysis_id, stage, state, attempt, "
@@ -94,7 +125,7 @@ class PostgresJobStore:
                     checkpoint.attempt,
                     checkpoint.processed_items,
                     checkpoint.total_items,
-                    self._jsonb(payload.get("output", {})),
+                    self._jsonb(output),
                     self._jsonb(payload.get("warnings", [])),
                     (
                         self._jsonb(payload["error"])
@@ -105,6 +136,13 @@ class PostgresJobStore:
                     checkpoint.completed_at,
                     checkpoint.updated_at,
                 ),
+            )
+            self._sync_stage_artifact(
+                connection,
+                record,
+                stage=checkpoint.stage.value,
+                state=checkpoint.state.value,
+                output=output,
             )
 
     def create(self, record: JobRecord) -> JobRecord:
