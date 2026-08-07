@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from geoanalyzer_storage import (
+    ArtifactRecord,
     BackupPolicy,
     BackupTarget,
     PostgresJsonCache,
@@ -79,15 +80,34 @@ def test_migrations_are_ordered_hash_pinned_and_schema_isolated() -> None:
     assert "CREATE EXTENSION IF NOT EXISTS postgis" in platform
     assert "CREATE SCHEMA IF NOT EXISTS ga_core" in platform
     assert "CREATE SCHEMA IF NOT EXISTS ga_cache" in platform
+    assert "geometry_json JSONB" in platform
     assert "CREATE SCHEMA IF NOT EXISTS ga_soika" in soika
     assert "ga_soika.geocoding_results" in soika
     assert "USING GIST(point)" in soika
     assert "USING GIST((point::geography))" in soika
 
 
+def test_artifact_content_is_deeply_immutable_after_digest_creation() -> None:
+    payload = {"nested": {"items": [1, 2]}}
+    artifact = ArtifactRecord(
+        application_id="soika",
+        analysis_id="analysis-1",
+        artifact_type="fixture",
+        artifact_key="nested",
+        payload=payload,
+    )
+    digest = artifact.content_digest
+    payload["nested"]["items"].append(3)
+
+    assert artifact.content_digest == digest
+    assert tuple(artifact.payload["nested"]["items"]) == (1, 2)
+    with pytest.raises(TypeError):
+        artifact.payload["nested"]["new"] = True
+
+
 def test_backup_commands_do_not_accept_or_emit_passwords() -> None:
     target = BackupTarget(
-        host="geo-db",
+        host="2001:db8::10",
         port=5432,
         database="geoanalyzer",
         user="backup_user",
@@ -99,6 +119,7 @@ def test_backup_commands_do_not_accept_or_emit_passwords() -> None:
     assert "--no-owner" in dump
     assert "--clean" in restore
     assert "--if-exists" in restore
+    assert "2001:db8::10" in dump
     assert not any("password" in part.casefold() for part in dump + restore)
 
 
