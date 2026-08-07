@@ -55,10 +55,9 @@ def _results(
             f"events require completed {stage.value} output",
         )
     payload = _mapping(stage_output.get(object_name), f"{stage.value}.{object_name}")
-    if "results" in payload:
-        raw_values = payload.get("results")
-    else:
-        raw_values = payload.get("messages")
+    raw_values = (
+        payload.get("results") if "results" in payload else payload.get("messages")
+    )
     values = _sequence(raw_values, object_name)
     if not all(isinstance(item, Mapping) for item in values):
         raise PermanentStageError(
