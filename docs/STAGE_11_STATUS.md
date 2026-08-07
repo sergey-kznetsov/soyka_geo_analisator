@@ -12,9 +12,9 @@ Geo Analyzer 2 не изменялся.
 
 Поддерживаются независимые уровни `building`, `link`, `road` и `global`. Совпадение spatial identity само по себе не создаёт событие: сообщения одного объекта дополнительно должны попасть в один семантический кластер и достигнуть `min_event_size`.
 
-Embedding, dimensionality reduction и clustering разделены интерфейсами. Embeddings вычисляются один раз на сообщение, а reduction/clustering создаются независимо для каждого scope. Изменяемая BERTopic-модель между объектами не переиспользуется. UMAP получает фиксированный `random_state`, HDBSCAN создаётся заново для каждого scope и явно поддерживает `allow_single_cluster`.
+Embedding, dimensionality reduction и clustering разделены интерфейсами. Embeddings вычисляются один раз на сообщение, а reduction/clustering создаются независимо для каждого scope. Изменяемая BERTopic-модель между объектами не переиспользуется. UMAP получает фиксированный `random_state`, безопасную для малых scope размерность и `init=random`; HDBSCAN создаётся заново для каждого scope и явно поддерживает `allow_single_cluster`.
 
-Минимальный объём задаётся конфигурацией. Один кластер является штатным результатом; отсутствие кластеров, недостаточный объём и отсутствующий spatial scope представлены отдельными diagnostics, а не исключениями.
+Минимальный объём задаётся конфигурацией. Один кластер является штатным результатом; отсутствие кластеров, недостаточный объём и отсутствующий spatial scope представлены отдельными diagnostics, а не исключениями. HDBSCAN noise label `-1` всегда остаётся diagnostics-only и не может образовать событие.
 
 ## Контракты и воспроизводимость
 
@@ -30,11 +30,12 @@ Risk, связи между событиями и итоговый score не в
 
 - Python compilation — passed;
 - Ruff — passed;
-- 241 deterministic unit/orchestration tests — passed;
+- 242 deterministic unit/orchestration tests — passed;
 - `poetry.lock` consistency — passed;
 - CPU Docker build/start — passed;
 - `/healthz` и `/readyz` — passed;
-- GPU target build — passed.
+- GPU target build — passed;
+- оба automated review threads — исправлены и resolved.
 
 ## Критерий завершения
 
