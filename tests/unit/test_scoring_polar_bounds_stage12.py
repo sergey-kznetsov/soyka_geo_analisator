@@ -46,7 +46,8 @@ def test_polar_points_use_local_azimuthal_equidistant_metric_crs() -> None:
     assert connection.distance_m < 1_000
     assert connection.metric_crs is not None
     assert "+proj=aeqd" in connection.metric_crs
-    assert result.provenance["polar_metric_crs"] == "local_azimuthal_equidistant"
+    assert result.provenance["event_spread_method"] == "local_aeqd_or_wgs84_geodesic"
+    assert result.provenance["line_distance_method"] == "local_aeqd_or_wgs84_geodesic"
 
 
 @pytest.mark.parametrize(
