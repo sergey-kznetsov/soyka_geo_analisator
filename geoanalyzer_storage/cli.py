@@ -47,14 +47,13 @@ def _migrate(args: argparse.Namespace) -> int:
 
 
 def _check(args: argparse.Namespace) -> int:
-    with _database(args) as database:
-        with database.connection() as connection:
-            server = connection.execute("SHOW server_version").fetchone()[0]
-            postgis = connection.execute("SELECT postgis_full_version()").fetchone()[0]
-            applied = connection.execute(
-                "SELECT version, name, checksum FROM ga_meta.schema_migrations "
-                "ORDER BY version"
-            ).fetchall()
+    with _database(args) as database, database.connection() as connection:
+        server = connection.execute("SHOW server_version").fetchone()[0]
+        postgis = connection.execute("SELECT postgis_full_version()").fetchone()[0]
+        applied = connection.execute(
+            "SELECT version, name, checksum FROM ga_meta.schema_migrations "
+            "ORDER BY version"
+        ).fetchall()
     print(
         json.dumps(
             {
