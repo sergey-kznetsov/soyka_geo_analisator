@@ -150,6 +150,22 @@ from .preprocessing import (
     source_message_from_dict,
     source_message_to_dict,
 )
+from .scoring import ALGORITHM_VERSION as SCORING_ALGORITHM_VERSION
+from .scoring import FORMULA_VERSION as RISK_FORMULA_VERSION
+from .scoring import (
+    ConnectionKind,
+    EventConnection,
+    EventRiskScore,
+    ExpertValidationManifest,
+    IndicatorScore,
+    IndicatorStatus,
+    RiskBand,
+    RiskScoringConfig,
+    RiskScoringEngine,
+    RiskScoringStageHandler,
+    ScoringBatchResult,
+    ScoringStats,
+)
 from .spatial_filtering import ALGORITHM_VERSION as SPATIAL_FILTERING_ALGORITHM_VERSION
 from .spatial_filtering import (
     PostGISIndexSpec,
@@ -169,7 +185,7 @@ from .spatial_filtering import (
     spatial_query_plan,
 )
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
@@ -177,6 +193,8 @@ __all__ = [
     "GEOLOCATION_ALGORITHM_VERSION",
     "PIPELINE_STAGES",
     "PREPROCESSING_ALGORITHM_VERSION",
+    "RISK_FORMULA_VERSION",
+    "SCORING_ALGORITHM_VERSION",
     "SPATIAL_FILTERING_ALGORITHM_VERSION",
     "SUPPORTED_CONTRACT_VERSIONS",
     "AccessMethod",
@@ -199,6 +217,7 @@ __all__ = [
     "ComplianceGate",
     "ConcurrentUpdateError",
     "ConfidenceBand",
+    "ConnectionKind",
     "ContractIssue",
     "ContractValidationError",
     "ContractVersion",
@@ -215,9 +234,12 @@ __all__ = [
     "EventClusteringConfig",
     "EventClusteringEngine",
     "EventClusteringStageHandler",
+    "EventConnection",
     "EventLevel",
     "EventMessage",
+    "EventRiskScore",
     "ExecutionDevice",
+    "ExpertValidationManifest",
     "FileJobStore",
     "FileParserCheckpointStore",
     "GateResult",
@@ -236,6 +258,8 @@ __all__ = [
     "IdempotencyConflictError",
     "IdentityReductionBackend",
     "InMemoryJobStore",
+    "IndicatorScore",
+    "IndicatorStatus",
     "InvalidStageOutputError",
     "JobLeaseError",
     "JobNotFoundError",
@@ -279,10 +303,16 @@ __all__ = [
     "ResultProvenance",
     "RetryPolicy",
     "RetryableStageError",
+    "RiskBand",
+    "RiskScoringConfig",
+    "RiskScoringEngine",
+    "RiskScoringStageHandler",
     "SQLiteResponseCache",
     "SafeHttpTransport",
     "ScopeDiagnostic",
     "ScopeStatus",
+    "ScoringBatchResult",
+    "ScoringStats",
     "SentenceTransformerEmbeddingBackend",
     "SoikaEngine",
     "SoikaOrchestrator",
