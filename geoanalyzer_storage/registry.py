@@ -18,12 +18,11 @@ class ApplicationRegistration:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "application_id", application_id(self.application_id))
-        if self.domain_schema is not None:
-            if (
-                not isinstance(self.domain_schema, str)
-                or _SCHEMA.fullmatch(self.domain_schema) is None
-            ):
-                raise ValueError("domain_schema must be a safe PostgreSQL identifier")
+        if self.domain_schema is not None and (
+            not isinstance(self.domain_schema, str)
+            or _SCHEMA.fullmatch(self.domain_schema) is None
+        ):
+            raise ValueError("domain_schema must be a safe PostgreSQL identifier")
 
 
 class PostgresApplicationRegistry:
