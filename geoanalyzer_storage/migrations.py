@@ -127,6 +127,20 @@ class MigrationRunner:
         ).fetchall()
         return {int(row[0]): (str(row[1]), str(row[2])) for row in rows}
 
+    def _validate_applied_history(
+        self,
+        applied: dict[int, tuple[str, str]],
+    ) -> None:
+        packaged_versions = {migration.version for migration in self.migrations}
+        missing_versions = sorted(set(applied) - packaged_versions)
+        if not missing_versions:
+            return
+        details = ", ".join(
+            f"{self.scope}:{version:04d}_{applied[version][0]}"
+            for version in missing_versions
+        )
+        raise MigrationError(f"applied migration missing from package: {details}")
+
     def _set_transaction_lock_timeout(self, connection: Any) -> None:
         timeout = f"{self.database.settings.lock_timeout_ms}ms"
         connection.execute(
@@ -144,6 +158,7 @@ class MigrationRunner:
             )
             connection.execute(_BOOTSTRAP_SQL)
             applied = self._applied(connection)
+            self._validate_applied_history(applied)
             for migration in self.migrations:
                 current = applied.get(migration.version)
                 if current is not None:
