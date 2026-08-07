@@ -10,13 +10,15 @@ Geo Analyzer 2 не изменялся.
 
 Связи строятся только по точному пересечению коллекций `message_ids`, имеют Jaccard weight и canonical ordering. Идентификаторы рассматриваются как целые строки, поэтому legacy-дефект посимвольного пересечения исключён.
 
-Геометрия связи остаётся GeoJSON `LineString` в `OGC:CRS84`. Метрическое расстояние рассчитывается после реальной coordinate transform через `pyproj`. Выбор центра долготы использует circular mean, поэтому события и связи, пересекающие антимеридиан, не получают искусственно глобальный spatial spread.
+Геометрия связи остаётся GeoJSON `LineString` в `OGC:CRS84`. Метрическое расстояние рассчитывается после реальной coordinate transform через `pyproj`. Выбор центра долготы использует circular mean, поэтому события и связи, пересекающие антимеридиан, не получают искусственно глобальный spatial spread. За пределами UTM используется локальная Azimuthal Equidistant CRS вместо Web Mercator, поэтому полярные distance/spread расчёты остаются метрическими и локальными.
 
 Наблюдаемые показатели отделены от итогового score. Baseline 1.0.0 использует intensity, persistence, unique external connectivity и spatial spread. Для каждого показателя сохраняются `raw_value`, `reference_value`, `normalized_value`, `weight`, `contribution`, `status` и `reason`.
 
 Dataset-relative min-max удалён. Нормализация использует фиксированные положительные references, поэтому zero-range division невозможен. Отсутствующее наблюдение делает score `unavailable`, а не равным нулю.
 
 Nested building/link/road/global events не увеличивают connectivity повторно: показатель основан на множестве уникальных внешних `message_ids`.
+
+Tolerance-accepted машинная погрешность суммы весов нормализуется в эффективный единичный бюджет до расчёта contributions. Поэтому итоговый score остаётся согласованным с суммой вкладов и ограниченным диапазоном `[0, 1]`.
 
 Формула, веса, references и thresholds версионированы и входят в `config_digest`. Версия пакета — `0.17.0`.
 
@@ -43,13 +45,15 @@ Nested building/link/road/global events не увеличивают connectivity
 
 ## Automated review
 
-Закрыты три замечания automated review:
+Закрыты пять замечаний automated review:
 
 1. stale expert manifest больше не публикуется как эффективное одобрение текущей formula/configuration;
 2. выбор локальной проекции корректно работает для точек по разные стороны антимеридиана;
-3. публичный `RiskScoringEngine.score()` валидирует каждый элемент `events` как `EventCluster` до чтения `event_id` и сортировки, поэтому malformed input возвращает контролируемый `TypeError`, а не `AttributeError`.
+3. публичный `RiskScoringEngine.score()` валидирует каждый элемент `events` как `EventCluster` до чтения `event_id` и сортировки;
+4. полярные metric calculations используют локальную Azimuthal Equidistant CRS, а не Web Mercator;
+5. tolerance-accepted веса нормализуются до единичного effective budget, поэтому saturated score не может выйти за `[0, 1]`.
 
-Все три дефекта покрыты regression tests, review threads resolved.
+Все пять дефектов покрыты regression tests, review threads resolved.
 
 ## Финальная проверка кодового head
 
@@ -57,16 +61,13 @@ GitHub Actions подтвердил:
 
 - Python compilation — passed;
 - Ruff — passed;
-- 258 deterministic unit/orchestration/regression tests — passed;
-- `poetry.lock` consistency — passed;
-- CPU Docker image build — passed;
-- CPU container start — passed;
-- `/healthz` и `/readyz` — passed;
-- GPU target build — passed.
+- 260 deterministic unit/orchestration/regression tests — passed;
+- `poetry.lock` consistency — passed на предыдущем неизменённом dependency graph и повторно проверяется на финальном doc-head;
+- CPU/GPU container gate повторно проверяется на финальном doc-head.
 
 ## Критерий
 
-Технический критерий этапа выполнен: один и тот же набор событий и точек даёт детерминированный, проверяемый и объяснимый результат независимо от порядка входа; связи используют точные идентификаторы и корректную CRS, нулевой диапазон нормализации не возникает, malformed public input обрабатывается контролируемо, а неизвестные данные не маскируются нулевым риском.
+Технический критерий этапа выполнен: один и тот же набор событий и точек даёт детерминированный, проверяемый и объяснимый результат независимо от порядка входа; связи используют точные идентификаторы и корректную CRS, нулевой диапазон нормализации не возникает, malformed public input обрабатывается контролируемо, веса не выводят score за единичный диапазон, а неизвестные данные не маскируются нулевым риском.
 
 Экспертная валидация остаётся внешним release-gate. Она принципиально не может быть закрыта кодом или автоматическим тестом без реального экспертного evidence.
 
