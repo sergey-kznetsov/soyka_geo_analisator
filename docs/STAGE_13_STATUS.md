@@ -85,6 +85,8 @@ Live integration test подтверждает основной критерий
 
 Idempotent `PostgresJobStore.create_idempotent()` дополнительно предотвращает создание второго job для неизменившегося запроса.
 
+Integration suite использует per-run UUID token для application IDs, domain schema, analysis IDs и cache namespaces, поэтому повторный запуск против persistent PostgreSQL volume не зависит от данных предыдущего прогона и не требует destructive cleanup чужих application rows.
+
 ## PostGIS и предметная схема СОЙКИ
 
 `ga_soika` содержит типизированные таблицы для:
@@ -120,6 +122,7 @@ Backup/restore baseline:
 - `pg_dump --format=custom --no-owner --no-acl`;
 - `pg_restore --clean --if-exists --no-owner --no-acl --exit-on-error`;
 - password не передаётся в argv;
+- archive path отделяется от опций `pg_restore` явным `--`, поэтому имя файла, начинающееся с `-`, не может быть интерпретировано как новая CLI option или переопределить target database;
 - поддерживаются обычные PostgreSQL endpoint forms, включая IPv6;
 - production credentials должны поступать из secret infrastructure/`PGPASSFILE`.
 
@@ -133,13 +136,15 @@ Backup/restore baseline:
 
 ## Automated review
 
-Закрыты три P2 замечания automated review:
+Закрыты пять P2 замечаний automated review:
 
 1. dependent migration scopes не могут выполниться раньше `platform` даже при обратном порядке CLI arguments;
 2. concurrent first access не может создать два lazy PostgreSQL connection pools;
-3. migration runner сохраняет настроенный `PostgresSettings.lock_timeout_ms` через transaction-local `set_config`; regression с `1234 ms` подтверждает отсутствие фиксированного пятисекундного override.
+3. migration runner сохраняет настроенный `PostgresSettings.lock_timeout_ms` через transaction-local `set_config`; regression с `1234 ms` подтверждает отсутствие фиксированного пятисекундного override;
+4. `pg_restore` отделяет archive path через `--`; regression с `--dbname=other` подтверждает, что option-like filename не может переопределить configured target;
+5. live integration data изолированы per-run identifiers/namespaces, поэтому повторные тестовые прогоны совместимы с persistent PostgreSQL volume.
 
-Все три дефекта покрыты regression tests, review threads resolved.
+Все пять дефектов покрыты regression/live integration tests, review threads resolved.
 
 ## Проверенная среда
 
@@ -154,7 +159,8 @@ Live storage gate подтвердил:
 - одинаковый Nominatim lookup не вызывает повторный transport;
 - optimistic PostgreSQL job store сохраняет orchestration contract;
 - completed checkpoint становится immutable stage artifact;
-- artifact GeoJSON/PostGIS round-trip сохраняет content digest.
+- artifact GeoJSON/PostGIS round-trip сохраняет content digest;
+- integration suite не конфликтует с данными предыдущих запусков за счёт per-run identifiers.
 
 ## Финальная проверка кодового head
 
@@ -162,7 +168,7 @@ GitHub Actions подтвердил:
 
 - Python compilation — passed;
 - Ruff — passed;
-- 275 deterministic unit/regression tests — passed;
+- 276 deterministic unit/regression tests — passed;
 - 8 live PostgreSQL/PostGIS integration tests — passed;
 - `poetry.lock` consistency — passed;
 - geolocation qualification workflow — passed;
