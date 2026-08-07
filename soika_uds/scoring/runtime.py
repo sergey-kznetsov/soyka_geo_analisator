@@ -388,9 +388,10 @@ class RiskScoringEngine:
     ) -> ScoringBatchResult:
         if isinstance(events, str | bytes | bytearray) or not isinstance(events, Sequence):
             raise TypeError("events must be an array")
-        ordered = tuple(sorted(events, key=lambda item: item.event_id))
-        if not all(isinstance(item, EventCluster) for item in ordered):
+        event_values = tuple(events)
+        if not all(isinstance(item, EventCluster) for item in event_values):
             raise TypeError("events must contain EventCluster values")
+        ordered = tuple(sorted(event_values, key=lambda item: item.event_id))
         ids = [item.event_id for item in ordered]
         if len(ids) != len(set(ids)):
             raise ValueError("event_id values must be unique")
