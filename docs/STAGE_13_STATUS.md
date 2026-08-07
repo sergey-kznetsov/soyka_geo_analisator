@@ -35,6 +35,7 @@ Runner:
 - устанавливает transaction-local `lock_timeout` из `PostgresSettings.lock_timeout_ms`, не переопределяя пользовательскую настройку фиксированным значением;
 - хранит SHA-256 каждой применённой migration;
 - fail-closed при изменении уже применённого SQL;
+- fail-closed, если уже применённая migration исчезла из поставляемого package;
 - повторное применение неизменённого scope является no-op;
 - не принимает migration из чужого scope.
 
@@ -62,7 +63,9 @@ CLI всегда автоматически включает `platform` и вы�
 
 `PostgresDatabase` создаёт pool лениво, но первый concurrent access сериализован отдельным lock. Double-check внутри critical section предотвращает создание и потерю второго `ConnectionPool`; `close()` также синхронизирует сброс ссылки.
 
-Concurrency regression искусственно задерживает первый `open()` и подтверждает, что два worker-потока получают один и тот же pool instance.
+Если synchronous `ConnectionPool.open(wait=True)` завершается исключением, локальный pool закрывается до re-raise. Поэтому outage не оставляет недостижимые background workers/connections и повторная попытка начинает с нового контролируемого pool instance.
+
+Регрессии подтверждают как сериализацию первого успешного `open()`, так и закрытие каждого pool после повторных failed opens.
 
 ## Durable cache и критерий повторного запуска
 
@@ -136,15 +139,17 @@ Backup/restore baseline:
 
 ## Automated review
 
-Закрыты пять P2 замечаний automated review:
+Закрыты семь P2 замечаний automated review:
 
 1. dependent migration scopes не могут выполниться раньше `platform` даже при обратном порядке CLI arguments;
 2. concurrent first access не может создать два lazy PostgreSQL connection pools;
 3. migration runner сохраняет настроенный `PostgresSettings.lock_timeout_ms` через transaction-local `set_config`; regression с `1234 ms` подтверждает отсутствие фиксированного пятисекундного override;
 4. `pg_restore` отделяет archive path через `--`; regression с `--dbname=other` подтверждает, что option-like filename не может переопределить configured target;
-5. live integration data изолированы per-run identifiers/namespaces, поэтому повторные тестовые прогоны совместимы с persistent PostgreSQL volume.
+5. live integration data изолированы per-run identifiers/namespaces, поэтому повторные тестовые прогоны совместимы с persistent PostgreSQL volume;
+6. failed synchronous pool open закрывает локальный `ConnectionPool` перед re-raise и не оставляет недостижимые reconnect workers;
+7. migration runner отклоняет БД, в journal которой есть применённая migration, отсутствующая в текущем package, предотвращая расхождение fresh и upgraded schemas.
 
-Все пять дефектов покрыты regression/live integration tests, review threads resolved.
+Все замечания покрыты regression/live integration tests.
 
 ## Проверенная среда
 
@@ -168,10 +173,10 @@ GitHub Actions подтвердил:
 
 - Python compilation — passed;
 - Ruff — passed;
-- 276 deterministic unit/regression tests — passed;
+- 278 deterministic unit/regression tests — passed;
 - 8 live PostgreSQL/PostGIS integration tests — passed;
 - `poetry.lock` consistency — passed;
-- geolocation qualification workflow — passed;
+- geolocation qualification workflow этапа 13 — passed на основном merge head;
 - CPU Docker image build — passed;
 - storage runtime (`geoanalyzer_storage`, `psycopg`, `psycopg_pool`) внутри CPU image — passed;
 - CPU container start — passed;
