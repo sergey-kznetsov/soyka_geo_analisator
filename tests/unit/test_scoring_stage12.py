@@ -48,6 +48,18 @@ def _points(*message_ids: str) -> dict[str, dict]:
     }
 
 
+def _manifest(config: RiskScoringConfig, *, config_digest: str | None = None):
+    return ExpertValidationManifest(
+        formula_version=config.formula_version,
+        config_digest=config_digest or config.digest,
+        review_id="expert-review-2026-08",
+        reviewer_role="urban-risk-domain-expert",
+        reviewed_at=datetime(2026, 8, 7, tzinfo=UTC).isoformat(),
+        evidence_digest="a" * 64,
+        approved=True,
+    )
+
+
 def test_connections_intersect_message_ids_as_sets_not_characters() -> None:
     events = (
         _event("evt-a", EventLevel.BUILDING, ("12", "34")),
@@ -161,24 +173,64 @@ def test_weights_and_thresholds_are_fail_closed() -> None:
         RiskScoringConfig(intensity_reference_messages=0)
 
 
-def test_matching_expert_manifest_enables_decision_use() -> None:
+def test_matching_manifest_without_external_verifier_stays_fail_closed() -> None:
     config = RiskScoringConfig()
-    manifest = ExpertValidationManifest(
-        formula_version=config.formula_version,
-        config_digest=config.digest,
-        review_id="expert-review-2026-08",
-        reviewer_role="urban-risk-domain-expert",
-        reviewed_at=datetime(2026, 8, 7, tzinfo=UTC).isoformat(),
-        evidence_digest="a" * 64,
-        approved=True,
-    )
     event = _event("evt-a", EventLevel.BUILDING, ("m1", "m2"))
-    result = RiskScoringEngine(config=config, expert_validation=manifest).score(
-        (event,), _points("m1", "m2")
-    )
+    result = RiskScoringEngine(
+        config=config,
+        expert_validation=_manifest(config),
+    ).score((event,), _points("m1", "m2"))
+
+    assert result.event_scores[0].decision_use_approved is False
+    assert result.formula_validation["manifest_approved"] is True
+    assert result.formula_validation["approved"] is False
+    assert result.formula_validation["status"] == "external_verifier_missing"
+
+
+def test_matching_manifest_and_verified_evidence_enable_decision_use() -> None:
+    config = RiskScoringConfig()
+    manifest = _manifest(config)
+    verified_ids: list[str] = []
+
+    def verifier(candidate: ExpertValidationManifest) -> bool:
+        verified_ids.append(candidate.review_id)
+        return candidate.evidence_digest == "a" * 64
+
+    event = _event("evt-a", EventLevel.BUILDING, ("m1", "m2"))
+    result = RiskScoringEngine(
+        config=config,
+        expert_validation=manifest,
+        expert_validation_verifier=verifier,
+    ).score((event,), _points("m1", "m2"))
 
     assert result.event_scores[0].decision_use_approved is True
     assert result.formula_validation["approved"] is True
+    assert result.formula_validation["external_verification_passed"] is True
+    assert verified_ids == ["expert-review-2026-08"]
+
+
+def test_stale_approved_manifest_is_reported_as_not_effectively_approved() -> None:
+    config = RiskScoringConfig()
+    manifest = _manifest(config, config_digest="b" * 64)
+    event = _event("evt-a", EventLevel.BUILDING, ("m1", "m2"))
+    result = RiskScoringEngine(
+        config=config,
+        expert_validation=manifest,
+        expert_validation_verifier=lambda _manifest: True,
+    ).score((event,), _points("m1", "m2"))
+
+    assert result.formula_validation["manifest_approved"] is True
+    assert result.formula_validation["manifest_matches_current_config"] is False
+    assert result.formula_validation["approved"] is False
+    assert result.formula_validation["status"] == "expert_manifest_stale"
+    assert result.event_scores[0].decision_use_approved is False
+
+
+def test_public_message_point_keys_are_validated() -> None:
+    event = _event("evt-a", EventLevel.BUILDING, ("m1", "m2"))
+
+    with pytest.raises(ValueError, match="message_points keys"):
+        RiskScoringEngine().score((event,), {1: _points("m1")["m1"]})
 
 
 def test_empty_events_are_supported() -> None:
