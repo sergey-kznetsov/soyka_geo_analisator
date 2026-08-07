@@ -82,6 +82,7 @@ def pg_restore_command(target: BackupTarget, source: Path | str) -> tuple[str, .
         target.user,
         "--dbname",
         target.database,
+        "--",
         str(path),
     )
 
