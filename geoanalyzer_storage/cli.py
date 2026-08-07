@@ -25,20 +25,26 @@ def _database(args: argparse.Namespace) -> PostgresDatabase:
 
 
 def _migrate(args: argparse.Namespace) -> int:
+    scopes = tuple(args.scopes or ("platform",))
+    applied = []
     with _database(args) as database:
-        applied = MigrationRunner(database).apply()
+        for scope in scopes:
+            applied.extend(MigrationRunner(database, scope=scope).apply())
     print(
         json.dumps(
             {
                 "applied": [
                     {
+                        "scope": item.scope,
                         "version": item.version,
                         "name": item.name,
                         "checksum": item.checksum,
                     }
                     for item in applied
                 ],
-                "available": len(discover_migrations()),
+                "available": {
+                    scope: len(discover_migrations(scope)) for scope in scopes
+                },
             },
             sort_keys=True,
         )
@@ -51,8 +57,8 @@ def _check(args: argparse.Namespace) -> int:
         server = connection.execute("SHOW server_version").fetchone()[0]
         postgis = connection.execute("SELECT postgis_full_version()").fetchone()[0]
         applied = connection.execute(
-            "SELECT version, name, checksum FROM ga_meta.schema_migrations "
-            "ORDER BY version"
+            "SELECT scope, version, name, checksum FROM ga_meta.schema_migrations "
+            "ORDER BY scope, version"
         ).fetchall()
     print(
         json.dumps(
@@ -60,7 +66,12 @@ def _check(args: argparse.Namespace) -> int:
                 "postgresql": server,
                 "postgis": postgis,
                 "migrations": [
-                    {"version": row[0], "name": row[1], "checksum": row[2]}
+                    {
+                        "scope": row[0],
+                        "version": row[1],
+                        "name": row[2],
+                        "checksum": row[3],
+                    }
                     for row in applied
                 ],
             },
@@ -105,6 +116,12 @@ def _parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     migrate = commands.add_parser("migrate")
+    migrate.add_argument(
+        "--scope",
+        dest="scopes",
+        action="append",
+        help="migration scope to apply; repeat for multiple scopes (default: platform)",
+    )
     migrate.set_defaults(handler=_migrate)
 
     check = commands.add_parser("check")
