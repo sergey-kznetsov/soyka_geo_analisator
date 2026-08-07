@@ -42,4 +42,9 @@ def test_antimeridian_points_keep_local_spread_and_connection_distance() -> None
     assert spread.raw_value < 20_000
     assert connection.distance_m is not None
     assert connection.distance_m < 20_000
-    assert result.provenance["longitude_center_method"] == "circular_mean"
+    assert connection.geometry["type"] == "MultiLineString"
+    first, second = connection.geometry["coordinates"]
+    assert abs(first[-1][0]) == 180.0
+    assert abs(second[0][0]) == 180.0
+    assert first[-1][0] == -second[0][0]
+    assert result.provenance["antimeridian_geometry"] == "split_multilinestring"
