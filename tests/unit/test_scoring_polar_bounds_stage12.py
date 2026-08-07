@@ -49,7 +49,7 @@ def test_polar_points_use_local_azimuthal_equidistant_metric_crs() -> None:
     assert result.provenance["polar_metric_crs"] == "local_azimuthal_equidistant"
 
 
-def test_score_is_clamped_when_accepted_weights_sum_slightly_above_one() -> None:
+def test_accepted_weight_tolerance_is_normalized_to_unit_sum() -> None:
     config = RiskScoringConfig(
         indicator_weights={
             "intensity": 0.1,
@@ -76,4 +76,7 @@ def test_score_is_clamped_when_accepted_weights_sum_slightly_above_one() -> None
 
     assert result.event_scores[0].score == pytest.approx(1.0)
     assert result.event_scores[1].score == pytest.approx(1.0)
-    assert result.provenance["score_bounds_policy"] == "aggregate_clamped_to_unit_interval"
+    assert sum(item.weight for item in result.event_scores[0].indicators) == pytest.approx(1.0)
+    assert result.provenance["weight_policy"] == (
+        "normalize_tolerance_accepted_weights_to_unit_sum"
+    )
