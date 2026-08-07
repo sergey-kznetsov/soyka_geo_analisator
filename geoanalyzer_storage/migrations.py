@@ -93,35 +93,34 @@ class MigrationRunner:
     def apply(self) -> tuple[Migration, ...]:
         migrations = discover_migrations()
         applied_now: list[Migration] = []
-        with self.database.connection() as connection:
-            with connection.transaction():
-                connection.execute("SET LOCAL lock_timeout = '5s'")
+        with self.database.connection() as connection, connection.transaction():
+            connection.execute("SET LOCAL lock_timeout = '5s'")
+            connection.execute(
+                "SELECT pg_advisory_xact_lock(%s)",
+                (_MIGRATION_LOCK_ID,),
+            )
+            connection.execute(_BOOTSTRAP_SQL)
+            applied = self._applied(connection)
+            for migration in migrations:
+                current = applied.get(migration.version)
+                if current is not None:
+                    current_name, current_checksum = current
+                    if (
+                        current_name != migration.name
+                        or current_checksum != migration.checksum
+                    ):
+                        raise MigrationChecksumError(
+                            "applied migration changed: "
+                            f"{migration.version:04d}_{migration.name}"
+                        )
+                    continue
+                connection.execute(migration.sql)
                 connection.execute(
-                    "SELECT pg_advisory_xact_lock(%s)",
-                    (_MIGRATION_LOCK_ID,),
+                    "INSERT INTO ga_meta.schema_migrations"
+                    "(version, name, checksum) VALUES (%s, %s, %s)",
+                    (migration.version, migration.name, migration.checksum),
                 )
-                connection.execute(_BOOTSTRAP_SQL)
-                applied = self._applied(connection)
-                for migration in migrations:
-                    current = applied.get(migration.version)
-                    if current is not None:
-                        current_name, current_checksum = current
-                        if (
-                            current_name != migration.name
-                            or current_checksum != migration.checksum
-                        ):
-                            raise MigrationChecksumError(
-                                "applied migration changed: "
-                                f"{migration.version:04d}_{migration.name}"
-                            )
-                        continue
-                    connection.execute(migration.sql)
-                    connection.execute(
-                        "INSERT INTO ga_meta.schema_migrations"
-                        "(version, name, checksum) VALUES (%s, %s, %s)",
-                        (migration.version, migration.name, migration.checksum),
-                    )
-                    applied_now.append(migration)
+                applied_now.append(migration)
         return tuple(applied_now)
 
 
