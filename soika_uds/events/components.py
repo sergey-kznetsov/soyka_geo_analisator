@@ -15,18 +15,15 @@ _COMMIT_RE = re.compile(r"^[a-f0-9]{40}$")
 _SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
 
 
-def _vectors(
-    value: Sequence[Sequence[float]],
-    field_name: str,
-) -> tuple[tuple[float, ...], ...]:
+def _vectors(value: Sequence[Sequence[float]], name: str) -> tuple[tuple[float, ...], ...]:
     rows = tuple(tuple(float(number) for number in row) for row in value)
     if not rows:
         return ()
     width = len(rows[0])
     if width < 1 or any(len(row) != width for row in rows):
-        raise ValueError(f"{field_name} vectors must have one non-zero width")
+        raise ValueError(f"{name} vectors must have one non-zero width")
     if any(not math.isfinite(number) for row in rows for number in row):
-        raise ValueError(f"{field_name} vectors must be finite")
+        raise ValueError(f"{name} vectors must be finite")
     return rows
 
 
@@ -68,13 +65,11 @@ class ClusterAssignment:
 
 
 class EmbeddingBackend(Protocol):
-    def embed(self, texts: Sequence[str]) -> EmbeddingBatch:
-        ...
+    def embed(self, texts: Sequence[str]) -> EmbeddingBatch: ...
 
 
 class ReductionBackend(Protocol):
-    def reduce(self, vectors: Sequence[Sequence[float]], *, seed: int) -> ReductionBatch:
-        ...
+    def reduce(self, vectors: Sequence[Sequence[float]], *, seed: int) -> ReductionBatch: ...
 
 
 class ClusteringBackend(Protocol):
@@ -85,14 +80,11 @@ class ClusteringBackend(Protocol):
         min_cluster_size: int,
         allow_single_cluster: bool,
         seed: int,
-    ) -> ClusterAssignment:
-        ...
+    ) -> ClusterAssignment: ...
 
 
 @dataclass(frozen=True, slots=True)
 class HashingEmbeddingBackend:
-    """Network-free deterministic reference embedder used for tests and fallback."""
-
     dimensions: int = 64
 
     def __post_init__(self) -> None:
@@ -108,45 +100,33 @@ class HashingEmbeddingBackend:
             for token in _TOKEN_RE.findall(text.casefold()):
                 digest = hashlib.sha256(token.encode("utf-8")).digest()
                 index = int.from_bytes(digest[:4], "big") % self.dimensions
-                sign = 1.0 if digest[4] & 1 else -1.0
-                values[index] += sign
+                values[index] += 1.0 if digest[4] & 1 else -1.0
             norm = math.sqrt(sum(value * value for value in values))
-            if norm:
-                values = [value / norm for value in values]
-            rows.append(tuple(values))
+            rows.append(tuple(value / norm for value in values) if norm else tuple(values))
         return EmbeddingBatch(
-            vectors=tuple(rows),
-            provenance={
-                "component": "hashing_embedding",
-                "version": "sha256-token-v1",
-                "dimensions": self.dimensions,
-            },
+            tuple(rows),
+            {"component": "hashing_embedding", "version": "sha256-token-v1", "dimensions": self.dimensions},
         )
 
 
 @dataclass(frozen=True, slots=True)
 class IdentityReductionBackend:
     def reduce(self, vectors: Sequence[Sequence[float]], *, seed: int) -> ReductionBatch:
-        rows = _vectors(vectors, "reduction input")
         return ReductionBatch(
-            vectors=rows,
-            provenance={"component": "identity_reduction", "seed": seed},
+            _vectors(vectors, "reduction input"),
+            {"component": "identity_reduction", "seed": seed},
         )
 
 
-def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
-    numerator = sum(left * right for left, right in zip(a, b, strict=True))
-    left_norm = math.sqrt(sum(value * value for value in a))
-    right_norm = math.sqrt(sum(value * value for value in b))
-    if left_norm == 0.0 or right_norm == 0.0:
-        return 0.0
-    return numerator / (left_norm * right_norm)
+def _cosine(left: Sequence[float], right: Sequence[float]) -> float:
+    numerator = sum(a * b for a, b in zip(left, right, strict=True))
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    return numerator / (left_norm * right_norm) if left_norm and right_norm else 0.0
 
 
 @dataclass(frozen=True, slots=True)
 class CosineGraphClusterer:
-    """Deterministic connected-components reference clustering backend."""
-
     similarity_threshold: float = 0.72
 
     def __post_init__(self) -> None:
@@ -172,24 +152,18 @@ class CosineGraphClusterer:
                 index = parents[index]
             return index
 
-        def union(left: int, right: int) -> None:
-            left_root = find(left)
-            right_root = find(right)
-            if left_root != right_root:
-                parents[max(left_root, right_root)] = min(left_root, right_root)
-
         for left in range(len(rows)):
             for right in range(left + 1, len(rows)):
-                if _cosine(rows[left], rows[right]) >= self.similarity_threshold:
-                    union(left, right)
-
-        components: dict[int, list[int]] = {}
+                if _cosine(rows[left], rows[right]) < self.similarity_threshold:
+                    continue
+                left_root, right_root = find(left), find(right)
+                if left_root != right_root:
+                    parents[max(left_root, right_root)] = min(left_root, right_root)
+        groups: dict[int, list[int]] = {}
         for index in range(len(rows)):
-            components.setdefault(find(index), []).append(index)
+            groups.setdefault(find(index), []).append(index)
         selected = [
-            indexes
-            for _, indexes in sorted(components.items())
-            if len(indexes) >= min_cluster_size
+            indexes for _, indexes in sorted(groups.items()) if len(indexes) >= min_cluster_size
         ]
         if len(selected) == 1 and not allow_single_cluster:
             selected = []
@@ -198,8 +172,8 @@ class CosineGraphClusterer:
             for index in indexes:
                 labels[index] = label
         return ClusterAssignment(
-            labels=tuple(labels),
-            provenance={
+            tuple(labels),
+            {
                 "component": "cosine_graph",
                 "version": "1",
                 "similarity_threshold": self.similarity_threshold,
@@ -215,39 +189,48 @@ class UMAPReductionBackend:
     min_dist: float = 0.0
     metric: str = "cosine"
 
+    def __post_init__(self) -> None:
+        if type(self.n_neighbors) is not int or self.n_neighbors < 2:
+            raise ValueError("n_neighbors must be an integer >= 2")
+        if type(self.n_components) is not int or self.n_components < 1:
+            raise ValueError("n_components must be a positive integer")
+        if not isinstance(self.min_dist, int | float) or not math.isfinite(self.min_dist):
+            raise ValueError("min_dist must be finite")
+        if self.min_dist < 0:
+            raise ValueError("min_dist must be non-negative")
+
     def reduce(self, vectors: Sequence[Sequence[float]], *, seed: int) -> ReductionBatch:
         rows = _vectors(vectors, "UMAP input")
         if len(rows) <= 2:
             return ReductionBatch(
-                vectors=rows,
-                provenance={
-                    "component": "umap",
-                    "version": "0.5.3",
-                    "seed": seed,
-                    "bypassed": True,
-                },
+                rows,
+                {"component": "umap", "version": "0.5.3", "seed": seed, "bypassed": True},
             )
         import numpy as np
         from umap import UMAP
 
-        neighbors = min(self.n_neighbors, len(rows) - 1)
+        neighbors = max(2, min(self.n_neighbors, len(rows) - 1))
+        components = max(1, min(self.n_components, len(rows) - 2))
         model = UMAP(
-            n_neighbors=max(2, neighbors),
-            n_components=min(self.n_components, max(2, len(rows) - 1)),
-            min_dist=self.min_dist,
+            n_neighbors=neighbors,
+            n_components=components,
+            min_dist=float(self.min_dist),
             metric=self.metric,
             random_state=seed,
+            init="random",
             low_memory=False,
         )
         reduced = model.fit_transform(np.asarray(rows, dtype=float))
         return ReductionBatch(
-            vectors=tuple(tuple(float(value) for value in row) for row in reduced),
-            provenance={
+            tuple(tuple(float(value) for value in row) for row in reduced),
+            {
                 "component": "umap",
                 "version": "0.5.3",
                 "random_state": seed,
-                "n_neighbors": max(2, neighbors),
+                "n_neighbors": neighbors,
+                "n_components": components,
                 "metric": self.metric,
+                "init": "random",
             },
         )
 
@@ -257,6 +240,12 @@ class HDBSCANClusteringBackend:
     min_samples: int = 1
     metric: str = "euclidean"
     cluster_selection_method: str = "eom"
+
+    def __post_init__(self) -> None:
+        if type(self.min_samples) is not int or self.min_samples < 1:
+            raise ValueError("min_samples must be a positive integer")
+        if self.cluster_selection_method not in {"eom", "leaf"}:
+            raise ValueError("cluster_selection_method must be eom or leaf")
 
     def cluster(
         self,
@@ -284,8 +273,8 @@ class HDBSCANClusteringBackend:
         )
         labels = model.fit_predict(np.asarray(rows, dtype=float))
         return ClusterAssignment(
-            labels=tuple(int(item) for item in labels),
-            provenance={
+            tuple(int(item) for item in labels),
+            {
                 "component": "hdbscan",
                 "version": "0.8.33",
                 "min_samples": self.min_samples,
@@ -299,8 +288,6 @@ class HDBSCANClusteringBackend:
 
 @dataclass(frozen=True, slots=True)
 class SentenceTransformerEmbeddingBackend:
-    """Adapter for a preloaded, verified sentence-transformer model."""
-
     model: Any
     model_id: str
     revision: str
@@ -311,10 +298,7 @@ class SentenceTransformerEmbeddingBackend:
             raise ValueError("model_id must be non-empty")
         if not isinstance(self.revision, str) or _COMMIT_RE.fullmatch(self.revision) is None:
             raise ValueError("revision must be an immutable 40-character commit SHA")
-        if (
-            not isinstance(self.weights_sha256, str)
-            or _SHA256_RE.fullmatch(self.weights_sha256) is None
-        ):
+        if not isinstance(self.weights_sha256, str) or _SHA256_RE.fullmatch(self.weights_sha256) is None:
             raise ValueError("weights_sha256 must be a lowercase SHA-256 digest")
         if not hasattr(self.model, "encode"):
             raise TypeError("model must provide encode()")
@@ -327,8 +311,8 @@ class SentenceTransformerEmbeddingBackend:
             show_progress_bar=False,
         )
         return EmbeddingBatch(
-            vectors=tuple(tuple(float(item) for item in row) for row in values),
-            provenance={
+            tuple(tuple(float(item) for item in row) for row in values),
+            {
                 "component": "sentence_transformer",
                 "model_id": self.model_id,
                 "revision": self.revision,
