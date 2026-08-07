@@ -6,6 +6,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from threading import Lock
 from typing import Any
 
 _APPLICATION_NAME = re.compile(r"^[A-Za-z0-9_.:-]{1,63}$")
@@ -58,6 +59,7 @@ class PostgresDatabase:
             raise TypeError("settings must be PostgresSettings")
         self.settings = settings
         self._pool: Any | None = None
+        self._pool_lock = Lock()
 
     def _configure(self, connection: Any) -> None:
         with connection.cursor() as cursor:
@@ -67,26 +69,35 @@ class PostgresDatabase:
             cursor.execute(f"SET lock_timeout = {self.settings.lock_timeout_ms}")
         connection.commit()
 
+    def _new_pool(self) -> Any:
+        try:
+            from psycopg_pool import ConnectionPool
+        except ImportError as error:
+            raise RuntimeError(
+                "PostgreSQL storage requires requirements-storage.txt"
+            ) from error
+        pool = ConnectionPool(
+            conninfo=self.settings.dsn,
+            min_size=self.settings.min_pool_size,
+            max_size=self.settings.max_pool_size,
+            kwargs={"application_name": self.settings.application_name},
+            configure=self._configure,
+            open=False,
+        )
+        pool.open(wait=True)
+        return pool
+
     @property
     def pool(self) -> Any:
-        if self._pool is None:
-            try:
-                from psycopg_pool import ConnectionPool
-            except ImportError as error:
-                raise RuntimeError(
-                    "PostgreSQL storage requires requirements-storage.txt"
-                ) from error
-            pool = ConnectionPool(
-                conninfo=self.settings.dsn,
-                min_size=self.settings.min_pool_size,
-                max_size=self.settings.max_pool_size,
-                kwargs={"application_name": self.settings.application_name},
-                configure=self._configure,
-                open=False,
-            )
-            pool.open(wait=True)
-            self._pool = pool
-        return self._pool
+        pool = self._pool
+        if pool is not None:
+            return pool
+        with self._pool_lock:
+            pool = self._pool
+            if pool is None:
+                pool = self._new_pool()
+                self._pool = pool
+            return pool
 
     @contextmanager
     def connection(self) -> Iterator[Any]:
@@ -94,8 +105,9 @@ class PostgresDatabase:
             yield connection
 
     def close(self) -> None:
-        pool = self._pool
-        self._pool = None
+        with self._pool_lock:
+            pool = self._pool
+            self._pool = None
         if pool is not None:
             pool.close()
 
