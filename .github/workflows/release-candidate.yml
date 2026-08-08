@@ -105,10 +105,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - name: Install PostgreSQL 18 client and focused runtime
+      - name: Install focused PostgreSQL runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client-18 libpq5
+          sudo apt-get install -y --no-install-recommends libpq5
           python -m pip install --upgrade \
             pip \
             pytest==7.4.4 \
@@ -127,32 +127,33 @@ jobs:
           tests/integration/test_worker_queue_stage14.py
           tests/integration/test_release_candidate_stage16.py
       - name: Backup and restore release candidate database
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
-          pg_dump \
+          docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" \
+            pg_dump \
             --format=custom \
             --no-owner \
             --no-acl \
-            --host 127.0.0.1 \
-            --port 5432 \
             --username geoanalyzer \
             --dbname geoanalyzer \
             --file /tmp/stage16-release-candidate.dump
-          dropdb --if-exists --host 127.0.0.1 --port 5432 --username geoanalyzer geoanalyzer_restore
-          createdb --host 127.0.0.1 --port 5432 --username geoanalyzer geoanalyzer_restore
-          pg_restore \
+          docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" \
+            dropdb --if-exists --username geoanalyzer geoanalyzer_restore
+          docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" \
+            createdb --username geoanalyzer geoanalyzer_restore
+          docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" \
+            pg_restore \
             --clean \
             --if-exists \
             --no-owner \
             --no-acl \
             --exit-on-error \
-            --host 127.0.0.1 \
-            --port 5432 \
             --username geoanalyzer \
             --dbname geoanalyzer_restore \
-            -- \
             /tmp/stage16-release-candidate.dump
-          migration_count="$(psql --host 127.0.0.1 --port 5432 --username geoanalyzer --dbname geoanalyzer_restore --tuples-only --no-align --command 'SELECT count(*) FROM ga_meta.schema_migrations')"
-          job_count="$(psql --host 127.0.0.1 --port 5432 --username geoanalyzer --dbname geoanalyzer_restore --tuples-only --no-align --command "SELECT count(*) FROM ga_core.jobs WHERE application_id = 'soika'")"
+          migration_count="$(docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" psql --username geoanalyzer --dbname geoanalyzer_restore --tuples-only --no-align --command 'SELECT count(*) FROM ga_meta.schema_migrations')"
+          job_count="$(docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" psql --username geoanalyzer --dbname geoanalyzer_restore --tuples-only --no-align --command "SELECT count(*) FROM ga_core.jobs WHERE application_id = 'soika'")"
           test "$migration_count" -ge 3
           test "$job_count" -ge 1
           GEOANALYZER_DATABASE_DSN=postgresql://geoanalyzer:stage16-ci-only@127.0.0.1:5432/geoanalyzer_restore \
