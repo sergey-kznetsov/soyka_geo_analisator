@@ -47,6 +47,7 @@ jobs:
           tests/unit
           tests/integration
           scripts/verify_stage16_external_evidence.py
+          scripts/export_stage16_locked_requirements.py
       - name: Run unit contract regression classifier event and risk suites
         run: python -m pytest -q tests/unit
 
@@ -187,5 +188,9 @@ jobs:
           cat /tmp/bandit-report.json
       - name: Block release candidate on high-severity static findings
         run: bandit -r soika_uds geoanalyzer_storage -lll -q
-      - name: Project dependency vulnerability scan
-        run: pip-audit . --progress-spinner off
+      - name: Export exact Poetry main-group lock versions
+        run: python scripts/export_stage16_locked_requirements.py --output /tmp/poetry-main.txt
+      - name: Audit locked runtime dependencies
+        run: pip-audit -r /tmp/poetry-main.txt --no-deps --progress-spinner off
+      - name: Audit storage runtime dependencies
+        run: pip-audit -r requirements-storage.txt --no-deps --progress-spinner off
