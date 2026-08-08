@@ -1,6 +1,14 @@
 """Geo-first source discovery for Russian urban-content collection."""
 
 from .classify import SourceClassifier, geo_evidence
+from .collection import (
+    CandidateCollectionError,
+    CandidateCollectionResult,
+    CandidateCollector,
+    CollectorRouter,
+    DiscoveryCollectionStageHandler,
+    source_message_document,
+)
 from .engine import DiscoveryEngine
 from .models import (
     ACTIVE_SOURCE_KINDS,
@@ -34,6 +42,11 @@ from .territory import (
 
 __all__ = [
     "ACTIVE_SOURCE_KINDS",
+    "CandidateCollectionError",
+    "CandidateCollectionResult",
+    "CandidateCollector",
+    "CollectorRouter",
+    "DiscoveryCollectionStageHandler",
     "DiscoveryEngine",
     "DiscoveryPlan",
     "DiscoveryQuery",
@@ -59,4 +72,5 @@ __all__ = [
     "canonical_url",
     "geo_evidence",
     "parse_yandex_xml",
+    "source_message_document",
 ]
