@@ -56,6 +56,8 @@ CPU worker читает только `compute_class=cpu`, GPU worker — тол�
 
 Queue lease по умолчанию — 600 секунд, heartbeat — 30 секунд. Конфигурация запрещает lease короче двух heartbeat interval.
 
+Любая ошибка queue heartbeat трактуется fail-closed как неопределённое владение lease: worker выставляет cancellation/lease-lost state, создаёт alert и после executor не выполняет `ack`. Это исключает продолжение работы с недоказанным правом владения queue item.
+
 ## Retry
 
 Worker-level retry используется только для infrastructure failure вокруг выполнения job: timeout, process/runtime error или потеря ресурса. Stage-level retry внутри оркестратора остаётся отдельным механизмом.
@@ -66,7 +68,13 @@ Worker queue хранит `attempt`, `max_attempts`, `available_at` и `last_err
 - multiplier: 2;
 - max: 300 секунд.
 
-После exhaustion queue item больше не claim-ится автоматически. Explicit retry сбрасывает worker attempt только после того, как backend также сбросил failed `JobRecord` через orchestration contract.
+После exhaustion queue item больше не claim-ится автоматически. Recovery разделён по canonical state:
+
+- если `JobRecord.status == failed`, queue row сохраняется exhausted вместе с CPU/GPU routing; explicit retry сначала сбрасывает queue item, затем вызывает canonical `retry_failed()`;
+- если infrastructure failure исчерпал worker attempts до перехода canonical job в `failed`, backend может выполнить queue-only retry, но только при отсутствии живого orchestration lease; pipeline checkpoints при этом не сбрасываются;
+- живой orchestration lease блокирует ручной queue-only retry через `JobLeaseError`.
+
+Если canonical reset после queue reset неожиданно завершается ошибкой, queue fail-closed переводится в cancelled state, а исходная ошибка возвращается вызывающему коду.
 
 ## Отмена
 
@@ -115,14 +123,15 @@ Compose передаёт DSN через Docker secret в `/run/secrets/geoanalyz
 
 Model/repository credentials должны передаваться аналогичным secret infrastructure, а не через command line или committed environment files.
 
-## Сеть
+## Сеть и probes
 
 `docker-compose.workers.yml`:
 
 - не публикует worker ports на host;
 - подключает worker только к выделенной external network `geoanalyzer_backend`;
 - `/healthz`, `/readyz`, `/metrics` доступны только внутри этой network;
-- standalone probe server по умолчанию вообще разрешает только loopback bind; remote bind требует явный `--allow-remote-probes`.
+- worker Compose healthcheck явно использует `127.0.0.1:9090/healthz`, а не inherited application probe на 8080;
+- standalone probe server по умолчанию разрешает только loopback bind; remote bind требует явный `--allow-remote-probes`.
 
 На этапе 14 worker не предоставляет публичный submit/cancel HTTP endpoint. Это исключает случайное обходное API. Transport и аутентификация backend Geo Analyzer вводятся на этапе 15.
 
@@ -136,6 +145,8 @@ Model/repository credentials должны передаваться аналог�
 - `worker.job.claimed`;
 - `worker.job.completed`;
 - `worker.job.failed`;
+- `worker.job.domain_failed`;
+- `worker.lease.heartbeat_error`;
 - `worker.shutdown.requested`;
 - `worker.loop.error`;
 - `worker.alert`;
@@ -148,10 +159,10 @@ Model/repository credentials должны передаваться аналог�
 Основные series:
 
 - claimed/completed/failed/requeued/exhausted jobs;
-- timeout и lease-conflict counters;
+- timeout, lease-conflict и lease-heartbeat-error counters;
 - active jobs;
 - ready/leased/delayed/exhausted/cancelled queue gauges;
-- oldest ready age;
+- oldest ready age, включая ready rows с истёкшим lease;
 - worker readiness/up state;
 - loop error counter.
 
@@ -165,7 +176,7 @@ Trace correlation следует формату W3C `traceparent`: 32-hex `trace
 
 `AlertSink` является интерфейсом. Default `LoggingAlertSink` создаёт machine-readable `worker.alert`. Alert генерируется для:
 
-- потери queue lease;
+- потери или неопределённости queue lease;
 - exhausted worker retry;
 - burst repeated failures;
 - worker-loop infrastructure failure.
@@ -180,4 +191,4 @@ Runtime намеренно не создаёт скрытый default pipeline: 
 
 ## Критерий отказоустойчивости
 
-Основная инварианта этапа: exception/timeout одного job обрабатывается внутри worker boundary, его queue item requeue/exhausted независимо, а polling loop продолжает брать следующие задания. Live PostgreSQL integration дополнительно проверяет, что два concurrent CPU worker claim-ят разные rows.
+Основная инварианта этапа: exception/timeout одного job обрабатывается внутри worker boundary, его queue item requeue/exhausted независимо, а polling loop продолжает брать следующие задания. Live PostgreSQL integration подтверждает, что concurrent worker claim-ят разные rows, retry/exhaustion восстанавливаются, а expired leases снова учитываются как ready work и в queue-age monitoring.
