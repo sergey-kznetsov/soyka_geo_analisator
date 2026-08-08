@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import tomllib
+from collections import defaultdict
 from pathlib import Path
 
 
@@ -11,8 +12,8 @@ def _locked_main_requirements(lock_path: Path) -> tuple[str, ...]:
     if not isinstance(packages, list):
         raise ValueError("poetry.lock does not contain a package array")
 
-    requirements: list[str] = []
-    seen: set[str] = set()
+    requirements: set[str] = set()
+    entries_by_name: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for package in packages:
         if not isinstance(package, dict):
             raise ValueError("poetry.lock package entries must be tables")
@@ -25,12 +26,36 @@ def _locked_main_requirements(lock_path: Path) -> tuple[str, ...]:
             raise ValueError("poetry.lock package name is invalid")
         if not isinstance(version, str) or not version.strip():
             raise ValueError(f"poetry.lock version is invalid for {name!r}")
-        requirement = f"{name.strip()}=={version.strip()}"
-        normalized = name.strip().lower().replace("_", "-")
-        if normalized in seen:
-            raise ValueError(f"duplicate main lock entry for {name!r}")
-        seen.add(normalized)
-        requirements.append(requirement)
+
+        marker_value = package.get("markers", "")
+        if marker_value is None:
+            marker_value = ""
+        if not isinstance(marker_value, str):
+            raise ValueError(f"poetry.lock markers are invalid for {name!r}")
+        marker = marker_value.strip()
+        if marker == "<empty>":
+            # Poetry uses this sentinel for a solver branch that cannot match
+            # any environment. It must not become a PEP 508 requirement.
+            continue
+
+        clean_name = name.strip()
+        clean_version = version.strip()
+        normalized = clean_name.lower().replace("_", "-")
+        previous_entries = entries_by_name[normalized]
+        if any(
+            existing_version != clean_version
+            and (not existing_marker or not marker)
+            for existing_version, existing_marker in previous_entries
+        ):
+            raise ValueError(
+                f"ambiguous unmarked main lock entries for {clean_name!r}"
+            )
+        previous_entries.append((clean_version, marker))
+
+        requirement = f"{clean_name}=={clean_version}"
+        if marker:
+            requirement = f"{requirement} ; {marker}"
+        requirements.add(requirement)
 
     if not requirements:
         raise ValueError("poetry.lock contains no main dependency entries")
