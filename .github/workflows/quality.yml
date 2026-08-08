@@ -152,6 +152,8 @@ jobs:
           ! grep -qE '^[[:space:]]+ports:' /tmp/stage14-workers.yml
           grep -q 'mem_limit:' /tmp/stage14-workers.yml
           grep -q 'geoanalyzer_backend' /tmp/stage14-workers.yml
+          grep -q '127.0.0.1:9090/healthz' /tmp/stage14-workers.yml
+          ! grep -q '127.0.0.1:8080/healthz' /tmp/stage14-workers.yml
 
       - name: Build CPU image
         run: docker build --target cpu --tag soika-uds:cpu .
