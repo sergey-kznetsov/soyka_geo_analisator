@@ -36,6 +36,7 @@ jobs:
           shapely==2.0.1
           pymorphy3==2.0.6
           pymorphy3-dicts-ru==2.4.417150.4580142
+          defusedxml==0.7.1
       - name: Compile release candidate sources
         run: python -m compileall -q factfinder pymorphy2 soika_uds geoanalyzer_storage scripts
       - name: Lint release candidate test surface
@@ -48,6 +49,7 @@ jobs:
           tests/integration
           scripts/verify_stage16_external_evidence.py
           scripts/export_stage16_locked_requirements.py
+          scripts/audit_stage17_dependency_usage.py
       - name: Run unit contract regression classifier event and risk suites
         run: python -m pytest -q tests/unit
 
@@ -189,6 +191,8 @@ jobs:
           cat /tmp/bandit-report.json
       - name: Block release candidate on high-severity static findings
         run: bandit -r soika_uds geoanalyzer_storage -lll -q
+      - name: Record direct dependency import usage
+        run: python scripts/audit_stage17_dependency_usage.py
       - name: Export exact Poetry main-group lock versions
         run: python scripts/export_stage16_locked_requirements.py --output /tmp/poetry-main.txt
       - name: Audit locked runtime dependencies

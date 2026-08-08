@@ -1,0 +1,35 @@
+# Historical SOIKA/factfinder research environment.
+#
+# NOT FOR PRODUCTION. This file intentionally preserves the dependency
+# versions imported with the research code so old experiments can be
+# reconstructed in an isolated environment when necessary. Stage 16 found
+# known vulnerabilities in this historical stack. It is deliberately not
+# part of the Poetry main group, Docker images, worker runtime, module API,
+# or release-candidate dependency gate.
+
+pandas==2.0.1
+matplotlib==3.7.1
+seaborn==0.12.2
+nltk==3.8.1
+scikit-learn==1.2.2
+spacy==3.5.2
+fuzzywuzzy==0.18.0
+geopandas==0.12.2
+numpy==1.24.3
+flair==0.12.2
+networkx==3.1
+osm2geojson==0.2.3
+osmnx==1.5.1
+pymorphy3==2.0.6
+pymorphy3-dicts-ru==2.4.417150.4580142
+torch==2.0.1
+tqdm==4.64.1
+geopy==2.3.0
+shapely==2.0.1
+transformers==4.28.1
+huggingface-hub==0.16.4
+bertopic==0.15.0
+hdbscan==0.8.33
+umap-learn==0.5.3
+natasha==1.6.0
+requests==2.31.0
