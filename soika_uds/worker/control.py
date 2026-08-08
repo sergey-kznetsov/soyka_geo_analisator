@@ -37,8 +37,10 @@ class WorkerControl:
         priority: int = 0,
         max_worker_attempts: int = 3,
         trace_id: str | None = None,
-    ) -> tuple[JobRecord, QueueItem]:
+    ) -> tuple[JobRecord, QueueItem | None]:
         record = self.orchestrator.submit(request)
+        if record.terminal:
+            return record, None
         item = self.queue.enqueue(
             record.analysis_id,
             compute_class=compute_class,
