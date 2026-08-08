@@ -14,6 +14,8 @@ from typing import Any, Protocol
 from urllib.parse import urlencode, urljoin, urlsplit
 from xml.etree import ElementTree
 
+from defusedxml.ElementTree import fromstring as safe_xml_fromstring
+
 from ...contracts import SourceMessage
 from ..models import (
     AccessMethod,
@@ -1010,7 +1012,7 @@ class HtmlConnectorAdapter:
         body: bytes,
     ) -> tuple[tuple[SourceMessage, ...], tuple[str, ...]]:
         try:
-            root = ElementTree.fromstring(body)
+            root = safe_xml_fromstring(body)
         except ElementTree.ParseError as error:
             raise PermanentParserError(
                 "upstream XML is invalid",

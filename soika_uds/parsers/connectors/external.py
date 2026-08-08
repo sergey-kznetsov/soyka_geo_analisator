@@ -12,7 +12,13 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
+from urllib.request import (
+    HTTPRedirectHandler,
+    HTTPSHandler,
+    Request,
+    build_opener,
+)
 
 _MAX_BYTES = 1_000_000
 _USER_AGENT = "SOIKA-UDS/0.8 controlled-external-probe"
@@ -66,6 +72,31 @@ class ExternalProbeResult:
     @property
     def received_response(self) -> bool:
         return self.status_code is not None
+
+
+def _validated_https_url(value: str) -> str:
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise ValueError("external probe URL must use HTTPS and contain a hostname")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("external probe URL must not contain userinfo")
+    return value
+
+
+class _HttpsOnlyRedirectHandler(HTTPRedirectHandler):
+    """Reject redirects that could downgrade or leave HTTPS transport."""
+
+    def redirect_request(
+        self,
+        req: Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> Request | None:
+        _validated_https_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def _decode_body(body: bytes, content_type: str | None) -> str:
@@ -134,7 +165,7 @@ def probe_target(
     timeout_seconds: float = 20.0,
 ) -> ExternalProbeResult:
     source_id = str(target["source_id"]).strip()
-    url = str(target["url"]).strip()
+    url = _validated_https_url(str(target["url"]).strip())
     fetched_at = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
     request = Request(
         url,
@@ -145,16 +176,18 @@ def probe_target(
         method="GET",
     )
     context = ssl.create_default_context()
+    opener = build_opener(_HttpsOnlyRedirectHandler(), HTTPSHandler(context=context))
     try:
-        with urlopen(request, timeout=timeout_seconds, context=context) as response:
+        with opener.open(request, timeout=timeout_seconds) as response:
             body = response.read(_MAX_BYTES + 1)
             if len(body) > _MAX_BYTES:
                 body = body[:_MAX_BYTES]
             content_type = response.headers.get("content-type")
+            final_url = _validated_https_url(response.geturl())
             return ExternalProbeResult(
                 source_id=source_id,
                 url=url,
-                final_url=response.geturl(),
+                final_url=final_url,
                 status_code=response.status,
                 content_type=content_type,
                 extracted=_extract(body, content_type),
@@ -164,17 +197,22 @@ def probe_target(
     except HTTPError as error:
         body = error.read(_MAX_BYTES)
         content_type = error.headers.get("content-type") if error.headers else None
+        final_url = error.geturl()
+        try:
+            final_url = _validated_https_url(final_url)
+        except ValueError:
+            final_url = None
         return ExternalProbeResult(
             source_id=source_id,
             url=url,
-            final_url=error.geturl(),
+            final_url=final_url,
             status_code=error.code,
             content_type=content_type,
             extracted=_extract(body, content_type),
             error=f"HTTP {error.code}: {error.reason}",
             fetched_at=fetched_at,
         )
-    except (URLError, TimeoutError, OSError) as error:
+    except (URLError, TimeoutError, OSError, ValueError) as error:
         return ExternalProbeResult(
             source_id=source_id,
             url=url,

@@ -1,0 +1,215 @@
+name: release-candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: release-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11.15"
+
+jobs:
+  unit-contract-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install deterministic test runtime
+        run: >-
+          python -m pip install --upgrade
+          pip
+          pytest==7.4.4
+          ruff==0.6.9
+          numpy==1.24.3
+          pyproj==3.7.2
+          shapely==2.0.1
+          pymorphy3==2.0.6
+          pymorphy3-dicts-ru==2.4.417150.4580142
+          defusedxml==0.7.1
+      - name: Compile release candidate sources
+        run: python -m compileall -q factfinder pymorphy2 soika_uds geoanalyzer_storage scripts
+      - name: Lint release candidate test surface
+        run: >-
+          ruff check
+          soika_uds
+          geoanalyzer_storage
+          pymorphy2
+          tests/unit
+          tests/integration
+          scripts/verify_stage16_external_evidence.py
+          scripts/export_stage16_locked_requirements.py
+          scripts/audit_stage17_dependency_usage.py
+      - name: Run unit contract regression classifier event and risk suites
+        run: python -m pytest -q tests/unit
+
+  module-protocol-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install focused module transport test dependencies
+        run: >-
+          python -m pip install --upgrade
+          pip
+          pytest==7.4.4
+          numpy==1.24.3
+          pyproj==3.7.2
+          shapely==2.0.1
+          pymorphy3==2.0.6
+          pymorphy3-dicts-ru==2.4.417150.4580142
+      - name: Verify pinned module protocol contract exists
+        run: |
+          test -s docs/module_protocol_v1.openapi.yaml
+          grep -q '^  version: 1.0.0$' docs/module_protocol_v1.openapi.yaml
+          grep -q '^    ProtocolVersion:$' docs/module_protocol_v1.openapi.yaml
+      - name: Run authenticated HTTP module protocol end-to-end tests
+        run: python -m pytest -q tests/unit/test_module_transport_stage15.py
+
+  postgres-load-failure-backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6@sha256:b410052c6f0d7d37b83cac1369df144e1c843971155dea3317961001704d0a9d
+        env:
+          POSTGRES_DB: geoanalyzer
+          POSTGRES_USER: geoanalyzer
+          POSTGRES_PASSWORD: stage16-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geoanalyzer -d geoanalyzer"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      GEOANALYZER_DATABASE_DSN: postgresql://geoanalyzer:stage16-ci-only@127.0.0.1:5432/geoanalyzer
+      GEOANALYZER_TEST_DATABASE_DSN: postgresql://geoanalyzer:stage16-ci-only@127.0.0.1:5432/geoanalyzer
+      PGPASSWORD: stage16-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install focused PostgreSQL runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpq5
+          python -m pip install --upgrade \
+            pip \
+            pytest==7.4.4 \
+            numpy==1.24.3 \
+            pyproj==3.7.2 \
+            shapely==2.0.1 \
+            pymorphy3==2.0.6 \
+            pymorphy3-dicts-ru==2.4.417150.4580142
+          python -m pip install --require-hashes --no-deps -r requirements-storage.txt
+      - name: Apply release candidate migrations
+        run: python -m geoanalyzer_storage.cli migrate --scope platform --scope soika --scope worker
+      - name: Run storage worker load soak and failure injection tests
+        run: >-
+          python -m pytest -q
+          tests/integration/test_storage_postgres_stage13.py
+          tests/integration/test_worker_queue_stage14.py
+          tests/integration/test_release_candidate_stage16.py
+      - name: Backup and restore release candidate database
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" \
+            pg_dump \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --username geoanalyzer \
+            --dbname geoanalyzer \
+            --file /tmp/stage16-release-candidate.dump
+          docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" \
+            dropdb --if-exists --username geoanalyzer geoanalyzer_restore
+          docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" \
+            createdb --username geoanalyzer geoanalyzer_restore
+          docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" \
+            pg_restore \
+            --clean \
+            --if-exists \
+            --no-owner \
+            --no-acl \
+            --exit-on-error \
+            --username geoanalyzer \
+            --dbname geoanalyzer_restore \
+            /tmp/stage16-release-candidate.dump
+          migration_count="$(docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" psql --username geoanalyzer --dbname geoanalyzer_restore --tuples-only --no-align --command 'SELECT count(*) FROM ga_meta.schema_migrations')"
+          job_count="$(docker exec -e PGPASSWORD=stage16-ci-only "$POSTGRES_CONTAINER" psql --username geoanalyzer --dbname geoanalyzer_restore --tuples-only --no-align --command "SELECT count(*) FROM ga_core.jobs WHERE application_id = 'soika'")"
+          test "$migration_count" -ge 3
+          test "$job_count" -ge 1
+          GEOANALYZER_DATABASE_DSN=postgresql://geoanalyzer:stage16-ci-only@127.0.0.1:5432/geoanalyzer_restore \
+            python -m geoanalyzer_storage.cli check
+
+  controlled-external-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Verify parser controlled-external evidence
+        run: python scripts/verify_stage16_external_evidence.py
+      - name: Verify geolocation qualification evidence
+        run: python scripts/verify_geolocation_evidence.py
+
+  security-dependency-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install pinned security scanners
+        run: python -m pip install --upgrade pip pip-audit==2.10.1 bandit==1.9.4
+      - name: Record medium-and-higher static security findings
+        run: |
+          bandit -r soika_uds geoanalyzer_storage -ll -f json -o /tmp/bandit-report.json || true
+          cat /tmp/bandit-report.json
+      - name: Block release candidate on high-severity static findings
+        run: bandit -r soika_uds geoanalyzer_storage -lll -q
+      - name: Record direct dependency import usage
+        run: python scripts/audit_stage17_dependency_usage.py
+      - name: Export exact Poetry main-group lock versions
+        run: python scripts/export_stage16_locked_requirements.py --output /tmp/poetry-main.txt
+      - name: Audit locked runtime dependencies
+        id: audit-runtime
+        continue-on-error: true
+        run: pip-audit -r /tmp/poetry-main.txt --no-deps --progress-spinner off
+      - name: Audit storage runtime dependencies
+        id: audit-storage
+        continue-on-error: true
+        run: pip-audit -r requirements-storage.txt --no-deps --progress-spinner off
+      - name: Enforce dependency audit gate
+        if: always()
+        env:
+          RUNTIME_AUDIT: ${{ steps.audit-runtime.outcome }}
+          STORAGE_AUDIT: ${{ steps.audit-storage.outcome }}
+        run: |
+          echo "runtime dependency audit: $RUNTIME_AUDIT"
+          echo "storage dependency audit: $STORAGE_AUDIT"
+          test "$RUNTIME_AUDIT" = success
+          test "$STORAGE_AUDIT" = success
