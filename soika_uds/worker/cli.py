@@ -133,7 +133,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--heartbeat-seconds", type=float, default=30.0)
     parser.add_argument("--poll-seconds", type=float, default=1.0)
     parser.add_argument("--job-timeout-seconds", type=float, default=3600.0)
-    parser.add_argument("--shutdown-grace-seconds", type=float, default=120.0)
     parser.add_argument("--probe-host", default="127.0.0.1")
     parser.add_argument("--probe-port", type=int, default=9090)
     parser.add_argument("--allow-remote-probes", action="store_true")
@@ -150,7 +149,6 @@ def _settings(args: Any) -> WorkerSettings:
         heartbeat_seconds=args.heartbeat_seconds,
         poll_seconds=args.poll_seconds,
         wall_timeout_seconds=args.job_timeout_seconds,
-        shutdown_grace_seconds=args.shutdown_grace_seconds,
     )
 
 
