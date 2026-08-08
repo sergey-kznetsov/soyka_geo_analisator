@@ -10,7 +10,7 @@
 
 Репозиторий содержит импортированный исходный код исследовательского проекта SOIKA. В исходной реализации уже присутствуют классификация текстов, уточнение тем, извлечение адресов, геокодирование, тематическая кластеризация, моделирование событий и расчёт рисков.
 
-Текущий исходный код является исследовательским прототипом, а не завершённой серверной программой. Цель этого репозитория — на его основе создать полноценную рабочую версию **СОЙКА UDS Development** для серверного использования совместно с Geo Analyzer.
+Текущая серверная версия содержит production-oriented orchestration, durable PostgreSQL/PostGIS storage, CPU/GPU worker runtime и приватный transport для интеграции с Geo Analyzer. Исследовательские алгоритмы поэтапно стабилизируются и квалифицируются внутри этой серверной архитектуры.
 
 ## Основная архитектура
 
@@ -27,11 +27,17 @@ Checkbox «Добавить статистику СОЙКА»
     ↓
 Backend Geo Analyzer
     ├── основной геоанализ
-    └── запуск СОЙКА UDS Development
+    └── universal analysis-module connector
+              ↓
+       private authenticated transport
+              ↓
+       СОЙКА UDS Development
+              ↓
+       durable queue + CPU/GPU worker
               ↓
        сбор и анализ комментариев
               ↓
-       структурированный результат
+       JSON / GeoJSON / warnings / coverage / report_sections
     ↓
 Общий отчёт Geo Analyzer
     └── дополнительная вкладка СОЙКА
@@ -47,6 +53,8 @@ Backend Geo Analyzer
 - SaaS-интерфейс;
 - ввод адреса и координат;
 - checkbox включения СОЙКИ;
+- глобальное включение/отключение модуля в административном интерфейсе;
+- регистрацию и проверку источника модуля;
 - запуск общего анализа;
 - отображение статуса;
 - основную карту;
@@ -55,7 +63,9 @@ Backend Geo Analyzer
 
 ### СОЙКА отвечает за
 
-- получение задания от backend Geo Analyzer;
+- предоставление versioned module manifest;
+- получение задания от backend Geo Analyzer через приватный transport;
+- durable постановку задания в очередь;
 - запуск подключённых парсеров;
 - сбор комментариев и сообщений;
 - очистку и нормализацию данных;
@@ -123,23 +133,32 @@ Backend Geo Analyzer
 
 СОЙКА не запрашивает адрес у пользователя. Она получает готовое задание от backend Geo Analyzer.
 
-Рекомендуемая структура задания:
+С этапа 15 внешнее задание обёрнуто в универсальный module protocol `1.0.0`. Пример:
 
 ```json
 {
+  "protocol_version": "1.0.0",
+  "module_id": "soyka.reviews",
   "analysis_id": "a8f31d42",
-  "address": "Ижевск, Пушкинская улица, 277",
-  "latitude": 56.8701,
-  "longitude": 53.2143,
-  "city": "Ижевск",
-  "radius_meters": 1500,
-  "territory_geojson": null,
-  "period_from": "2026-05-01",
-  "period_to": "2026-08-03",
+  "requested_at": "2026-08-08T08:00:00Z",
+  "idempotency_key": "geo-analyzer:...",
+  "territory": {
+    "city": "Ижевск",
+    "address": "Ижевск, Пушкинская улица, 277",
+    "point": {
+      "latitude": 56.8701,
+      "longitude": 53.2143
+    },
+    "radius_meters": 1500,
+    "geometry": null
+  },
   "sources": ["source_1", "source_2"],
-  "options": {}
+  "options": {},
+  "allow_partial": true
 }
 ```
+
+Transport adapter преобразует этот envelope во внутренний `AnalysisRequestV1`. Geo Analyzer не зависит от внутренних Python-классов СОЙКИ.
 
 Предпочтительно передавать одновременно адрес и координаты:
 
@@ -147,7 +166,7 @@ Backend Geo Analyzer
 - координаты используются для точной пространственной фильтрации;
 - город ограничивает область поиска улиц и объектов;
 - радиус или GeoJSON-полигон задаёт территорию анализа;
-- временной период ограничивает собираемые данные;
+- временной период и прочие параметры передаются в `options`;
 - список источников определяет разрешённые парсеры.
 
 ## Функции программы
@@ -157,11 +176,12 @@ Backend Geo Analyzer
 СОЙКА должна:
 
 - принять идентификатор анализа;
+- проверить версию module protocol и `module_id`;
 - проверить обязательные поля;
 - проверить координаты, адрес, период и геометрию;
 - сформировать внутренний контекст выполнения;
 - отклонить некорректное задание с понятным описанием ошибки;
-- обеспечить повторяемость задания по его идентификатору.
+- обеспечить повторяемость задания по его идентификатору и idempotency key.
 
 ### 2. Формирование территории анализа
 
@@ -674,10 +694,12 @@ unknown
 
 ### 24. Серверное выполнение
 
-СОЙКА работает как отдельный серверный процесс или worker и должна поддерживать:
+СОЙКА работает как отдельные серверные процессы и поддерживает:
 
+- приватный module API для Geo Analyzer;
 - получение нового задания;
-- очередь заданий;
+- durable PostgreSQL очередь заданий;
+- отдельные CPU/GPU worker;
 - фоновую обработку;
 - обновление статуса;
 - отмену задания;
@@ -692,7 +714,7 @@ unknown
 
 ### 25. Статусы выполнения
 
-Поддерживаемые статусы:
+Внутренний orchestration сохраняет детальные статусы:
 
 ```text
 queued
@@ -710,24 +732,34 @@ failed
 cancelled
 ```
 
-Geo Analyzer использует эти статусы для отображения прогресса пользователю.
+Стабильный внешний module protocol сворачивает промежуточные стадии в `running` и использует публичные статусы:
+
+```text
+queued
+running
+completed
+completed_with_warnings
+failed
+cancelled
+```
+
+Детальное внутреннее состояние может передаваться в `raw_status`, но Geo Analyzer не должен зависеть от него как от стабильного контракта.
 
 ### 26. Структурированный результат
 
 СОЙКА не формирует пользовательскую вкладку и не создаёт основной отчёт. Она возвращает данные, из которых Geo Analyzer строит вкладку.
 
-Пример результата:
+Пример module envelope:
 
 ```json
 {
+  "protocol_version": "1.0.0",
+  "module_id": "soyka.reviews",
+  "module_version": "0.20.0",
   "analysis_id": "a8f31d42",
   "status": "completed",
-  "territory": {
-    "address": "Ижевск, Пушкинская улица, 277",
-    "latitude": 56.8701,
-    "longitude": 53.2143,
-    "radius_meters": 1500
-  },
+  "generated_at": "2026-08-08T08:05:00Z",
+  "partial": false,
   "coverage": {
     "sources_requested": 5,
     "sources_available": 4,
@@ -736,26 +768,28 @@ Geo Analyzer использует эти статусы для отображе�
     "messages_geocoded": 214,
     "messages_low_confidence": 34
   },
-  "categories": [],
-  "topics": [],
-  "events": [],
-  "connections": [],
-  "timeline": [],
-  "risk_summary": {},
-  "messages": [],
+  "warnings": [],
+  "errors": [],
+  "result": {
+    "categories": [],
+    "topics": [],
+    "events": [],
+    "connections": [],
+    "timeline": [],
+    "risk_summary": {},
+    "messages": [],
+    "metadata": {},
+    "provenance": {}
+  },
   "geojson": {
     "type": "FeatureCollection",
     "features": []
   },
-  "warnings": [],
-  "errors": [],
-  "versions": {
-    "soika": "1.0.0",
-    "classifier": "model-revision",
-    "event_algorithm": "1.0"
-  }
+  "report_sections": []
 }
 ```
+
+`result` является модульно-специфичным payload. Остальная оболочка является стабильным transport contract.
 
 ### 27. Географические данные для карты
 
@@ -789,16 +823,20 @@ Geo Analyzer использует эти статусы для отображе�
 
 Ошибка СОЙКИ не должна уничтожать основной отчёт Geo Analyzer. Основной геоанализ должен завершиться, а вкладка СОЙКА должна показать ошибку или неполный результат.
 
+HTTP-ошибки private transport возвращаются как `application/problem+json`. Bearer token и DSN не передаются через argv и должны поступать из secret files.
+
 ## Что СОЙКА не делает
 
 СОЙКА не отвечает за:
 
 - регистрацию пользователей;
-- авторизацию;
+- авторизацию пользователей Geo Analyzer;
 - тарифы и платежи;
 - SaaS-интерфейс;
 - форму ввода адреса;
 - checkbox включения модуля;
+- кнопку включения/отключения функции в Geo Analyzer;
+- реестр источников модулей Geo Analyzer;
 - главную карту;
 - основной геоанализ;
 - инфраструктурный анализ;
@@ -811,67 +849,110 @@ Geo Analyzer использует эти статусы для отображе�
 
 СОЙКА не должна становиться вторым Geo Analyzer и не должна дублировать его функции.
 
-## Интеграция с Geo Analyzer
+## Интеграция с Geo Analyzer — этап 15
 
 GitHub используется для хранения, версионирования и развёртывания исходного кода. Во время анализа Geo Analyzer не обращается к GitHub.
 
-На сервере СОЙКА может быть установлена:
+Экран Geo Analyzer «Источники модулей анализа» регистрирует HTTPS Git URL или путь к папке на сервере. Регистрация источника сама по себе не должна скачивать, импортировать или запускать код. Только отдельно проверенный и разрешённый модуль может получить runtime connector.
+
+С этапа 15 фактический server-to-server обмен определён и версионирован:
+
+```text
+Geo Analyzer universal connector
+        ↓
+private backend network
+        ↓
+soika-module-api :9080
+        ↓
+WorkerControl / PostgreSQL job_queue
+        ↓
+soika-worker-cpu / soika-worker-gpu
+```
+
+Module API предоставляет:
+
+```text
+GET  /v1/manifest
+GET  /v1/health
+POST /v1/analyses
+GET  /v1/analyses/{analysis_id}
+GET  /v1/analyses/{analysis_id}/result
+POST /v1/analyses/{analysis_id}/cancel
+POST /v1/analyses/{analysis_id}/retry
+```
+
+Все endpoints требуют Bearer authentication. Процесс по умолчанию слушает loopback; remote bind требует явного разрешения и предназначен только для закрытой backend-сети. В `docker-compose.workers.yml` сервис `soika-module-api` не публикует host port и доступен только через `geoanalyzer_backend`.
+
+Manifest декларирует две UI-возможности, но не реализует их:
+
+- `analysis_launch_toggle = true` — закладка для будущего отдельного checkbox СОЙКИ на экране «Новый анализ»;
+- `capability_card = true` — закладка для будущей отключаемой функции СОЙКИ в административном блоке «Возможности».
+
+Состояние checkbox и административной кнопки принадлежит Geo Analyzer. СОЙКА задаёт `optional = true` и `default_enabled = false`, поэтому включение должно быть явным.
+
+Подробное описание transport contract находится в `docs/MODULE_TRANSPORT.md`.
+
+## Развёртывание server runtime
+
+СОЙКА может быть установлена:
 
 - отдельным Python-пакетом;
 - в отдельной серверной папке;
 - отдельным Docker-контейнером;
-- отдельным worker-процессом.
+- отдельными worker-процессами.
 
 Рекомендуемая серверная схема:
 
 ```text
 geo-analyzer-web
 geo-analyzer-worker
-soika-worker
-database
-redis
+soika-module-api
+soika-worker-cpu
+soika-worker-gpu
+postgresql-postgis
 shared-storage
 ```
 
-Способ внутреннего обмена между backend Geo Analyzer и СОЙКОЙ определяется при реализации серверной инфраструктуры. Это может быть внутренняя очередь задач, локальный сервис, Unix socket или иной непубличный транспорт.
+Запуск module API вне Compose:
+
+```bash
+export GEOANALYZER_DATABASE_DSN_FILE=/run/secrets/geoanalyzer_database_dsn
+export SOIKA_MODULE_AUTH_TOKEN_FILE=/run/secrets/soika_module_auth_token
+soika-module-api --host 127.0.0.1 --port 9080
+```
 
 Внешний публичный интерфейс СОЙКИ не требуется.
 
-## Предполагаемая структура программы
+## Фактическая структура программы
 
 ```text
 soyka_geo_analisator/
-├── src/soika_uds/
-│   ├── core/                 # оркестратор, модели задания и результата
-│   ├── territory/            # адрес, координаты, радиус и полигон
-│   ├── parsers/              # реестр и адаптеры источников
-│   ├── preprocessing/        # очистка и дедупликация
+├── soika_uds/
 │   ├── classification/       # категории
-│   ├── topics/               # уточнённые темы
-│   ├── geolocation/          # извлечение и нормализация адресов
-│   ├── osm/                  # OSMnx, Overpass и Nominatim
-│   ├── events/               # кластеризация и события
-│   ├── risk/                 # показатели, приоритет и риск
-│   ├── storage/              # база данных и репозитории
-│   ├── integration/          # обмен с Geo Analyzer
-│   └── workers/              # серверное выполнение задач
-│
-├── legacy/                   # исходный код импортированной SOIKA
+│   ├── geolocation/          # адреса и OSM
+│   ├── events/               # события и связи
+│   ├── scoring/              # риск и показатели
+│   ├── preprocessing/        # очистка и дедупликация
+│   ├── spatial_filtering/    # пространственный отбор
+│   ├── parsers/              # реестр и адаптеры источников
+│   ├── integration/          # внутренние versioned contracts
+│   ├── orchestration/        # durable pipeline state
+│   ├── worker/               # CPU/GPU server runtime
+│   └── transport/            # module protocol и private HTTP server
+├── geoanalyzer_storage/      # PostgreSQL/PostGIS storage и migrations
 ├── models/                   # версии и метаданные моделей
-├── configs/                  # конфигурация
-├── migrations/               # миграции базы данных
-├── tests/                    # unit, integration и end-to-end тесты
-├── scripts/                  # обслуживание и загрузка моделей
+├── tests/                    # unit и integration tests
+├── docs/                     # эксплуатационная и интеграционная документация
 ├── Dockerfile
-├── docker-compose.yml
+├── docker-compose.workers.yml
 └── pyproject.toml
 ```
 
-Фактическая структура будет изменяться по мере переноса и стабилизации существующего кода. Архитектурные границы из этого README должны сохраняться.
+Архитектурные границы из этого README должны сохраняться при дальнейшей разработке.
 
 ## Основные подсистемы полноценной версии
 
-1. Модуль получения задания.
+1. Модуль получения задания и module transport.
 2. Контроллер территории.
 3. Реестр парсеров.
 4. Парсеры источников.
@@ -889,13 +970,13 @@ soyka_geo_analisator/
 16. Расчёт показателей.
 17. Расчёт приоритета и риска.
 18. Оценка покрытия данных.
-19. База данных.
+19. PostgreSQL/PostGIS storage.
 20. Кеш.
 21. Управление моделями.
-22. Очередь серверных заданий.
+22. Durable queue и CPU/GPU workers.
 23. Журналирование.
 24. Мониторинг.
-25. Возврат JSON и GeoJSON.
+25. Возврат JSON, GeoJSON и report sections.
 26. Автоматические тесты.
 27. Воспроизводимое Docker-развёртывание.
 
@@ -904,9 +985,12 @@ soyka_geo_analisator/
 - название продукта: **СОЙКА UDS Development**;
 - краткое название: **СОЙКА**;
 - имя репозитория: `soyka_geo_analisator`;
-- планируемое имя Python-пакета: `soika_uds`;
+- имя Python-пакета: `soika_uds`;
+- версия пакета этапа 15: `0.20.0`;
 - серверный worker: `soika-worker`;
-- идентификатор интеграции: `soika_uds`;
+- private module API: `soika-module-api`;
+- идентификатор модуля: `soyka.reviews`;
+- версия module protocol: `1.0.0`;
 - название вкладки в Geo Analyzer: **СОЙКА UDS Development**.
 
 ## Правила разработки
@@ -916,11 +1000,13 @@ soyka_geo_analisator/
 3. Новые источники данных добавляются отдельными парсерами через общий интерфейс.
 4. Аналитические модели не должны напрямую зависеть от конкретного источника данных.
 5. Географическая логика СОЙКИ строится на OpenStreetMap.
-6. Все модели, формулы и алгоритмы должны иметь зафиксированные версии.
+6. Все модели, формулы, алгоритмы и transport contracts должны иметь зафиксированные версии.
 7. Неопределённость классификации, геокодирования и покрытия должна возвращаться явно.
 8. Отсутствие данных нельзя автоматически трактовать как отсутствие проблемы.
 9. Ошибка СОЙКИ не должна прерывать основной анализ Geo Analyzer.
-10. Любое изменение границы ответственности сначала фиксируется в этом README.
+10. Git/source registration не является разрешением на автоматическое выполнение кода.
+11. Geo Analyzer должен зависеть от universal module protocol, а не от Python API СОЙКИ.
+12. Любое изменение границы ответственности сначала фиксируется в этом README.
 
 ## Исходный проект SOIKA
 
