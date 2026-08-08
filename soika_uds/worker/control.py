@@ -66,8 +66,9 @@ class WorkerControl:
         except BaseException:
             try:
                 self.queue.request_cancel(analysis_id)
-            finally:
-                raise
+            except Exception:
+                pass
+            raise
 
 
 class OrchestratorExecutor:
