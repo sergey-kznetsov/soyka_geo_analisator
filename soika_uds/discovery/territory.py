@@ -34,9 +34,12 @@ def _first_text(mapping: Mapping[str, Any], keys: tuple[str, ...]) -> str | None
     return None
 
 
+def _normalized_place(value: str) -> str:
+    return value.casefold().replace("ё", "е").strip()
+
+
 def _same_place(left: str, right: str) -> bool:
-    normalize = lambda value: value.casefold().replace("ё", "е").strip()
-    return normalize(left) == normalize(right)
+    return _normalized_place(left) == _normalized_place(right)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +54,10 @@ class TerritoryResolver:
         if not territory.address:
             raise TerritoryResolutionError(
                 SourceReasonCode.TERRITORY_UNRESOLVED,
-                "geo-first discovery currently requires an address; coordinate-only reverse resolution is not configured",
+                (
+                    "geo-first discovery currently requires an address; "
+                    "coordinate-only reverse resolution is not configured"
+                ),
             )
 
         message = {
@@ -73,12 +79,15 @@ class TerritoryResolver:
                 SourceReasonCode.TERRITORY_UNRESOLVED,
                 f"target address could not be resolved with qualified precision: {reason}",
             )
-        if resolved.mention is not None and resolved.mention.kind is LocationKind.HOUSE:
-            if selected.kind is not LocationKind.HOUSE:
-                raise TerritoryResolutionError(
-                    SourceReasonCode.TERRITORY_UNRESOLVED,
-                    "house-level input did not resolve to a house-level candidate",
-                )
+        if (
+            resolved.mention is not None
+            and resolved.mention.kind is LocationKind.HOUSE
+            and selected.kind is not LocationKind.HOUSE
+        ):
+            raise TerritoryResolutionError(
+                SourceReasonCode.TERRITORY_UNRESOLVED,
+                "house-level input did not resolve to a house-level candidate",
+            )
 
         address = selected.address
         city = _first_text(
