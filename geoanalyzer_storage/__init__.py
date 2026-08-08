@@ -22,7 +22,7 @@ from .postgres import PostgresDatabase, PostgresSettings
 from .registry import ApplicationRegistration, PostgresApplicationRegistry
 from .retention import RetentionManager, RetentionPolicy
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = [
     "ApplicationRegistration",
