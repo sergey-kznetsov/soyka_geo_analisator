@@ -15,6 +15,18 @@ x-worker-common: &worker-common
     SOIKA_WORKER_EXECUTOR: ${SOIKA_WORKER_EXECUTOR:?SOIKA_WORKER_EXECUTOR is required}
   expose:
     - "9090"
+  healthcheck:
+    test:
+      - CMD
+      - python
+      - -c
+      - >-
+        import urllib.request;
+        urllib.request.urlopen('http://127.0.0.1:9090/healthz', timeout=3).read()
+    interval: 30s
+    timeout: 5s
+    start_period: 30s
+    retries: 3
   networks:
     - geoanalyzer_backend
   security_opt:
