@@ -1,0 +1,196 @@
+name: release-candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: release-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11.15"
+  GEO_ANALYZER_STAGE15_REF: cd8fd98866c299348deb2ac292dc79a68046348d
+
+jobs:
+  unit-contract-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install deterministic test runtime
+        run: >-
+          python -m pip install --upgrade
+          pip
+          pytest==7.4.4
+          ruff==0.6.9
+          numpy==1.24.3
+          pyproj==3.7.2
+          shapely==2.0.1
+          pymorphy3==2.0.6
+          pymorphy3-dicts-ru==2.4.417150.4580142
+      - name: Compile release candidate sources
+        run: python -m compileall -q factfinder pymorphy2 soika_uds geoanalyzer_storage scripts
+      - name: Lint release candidate test surface
+        run: >-
+          ruff check
+          soika_uds
+          geoanalyzer_storage
+          pymorphy2
+          tests/unit
+          tests/integration
+          tests/e2e
+          scripts/verify_stage16_external_evidence.py
+      - name: Run unit contract regression classifier event and risk suites
+        run: python -m pytest -q tests/unit
+
+  cross-repo-contract-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: sergey-kznetsov/geo_analyzer_2
+          ref: ${{ env.GEO_ANALYZER_STAGE15_REF }}
+          path: _geo_analyzer_2
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install focused cross-repo test dependencies
+        run: >-
+          python -m pip install --upgrade
+          pip
+          pytest==7.4.4
+          requests==2.34.2
+          openpyxl==3.1.5
+          numpy==1.24.3
+          pyproj==3.7.2
+          shapely==2.0.1
+          pymorphy3==2.0.6
+          pymorphy3-dicts-ru==2.4.417150.4580142
+      - name: Verify protocol specification is byte-identical
+        run: cmp docs/module_protocol_v1.openapi.yaml _geo_analyzer_2/docs/module_protocol_v1.openapi.yaml
+      - name: Run Geo Analyzer to SOIKA end-to-end protocol test
+        env:
+          PYTHONPATH: ${{ github.workspace }}/_geo_analyzer_2/src:${{ github.workspace }}
+        run: python -m pytest -q tests/e2e/test_geo_analyzer_soika_stage16.py
+
+  postgres-load-failure-backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6@sha256:b410052c6f0d7d37b83cac1369df144e1c843971155dea3317961001704d0a9d
+        env:
+          POSTGRES_DB: geoanalyzer
+          POSTGRES_USER: geoanalyzer
+          POSTGRES_PASSWORD: stage16-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U geoanalyzer -d geoanalyzer"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      GEOANALYZER_DATABASE_DSN: postgresql://geoanalyzer:stage16-ci-only@127.0.0.1:5432/geoanalyzer
+      GEOANALYZER_TEST_DATABASE_DSN: postgresql://geoanalyzer:stage16-ci-only@127.0.0.1:5432/geoanalyzer
+      PGPASSWORD: stage16-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install PostgreSQL client and focused runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client libpq5
+          python -m pip install --upgrade \
+            pip \
+            pytest==7.4.4 \
+            numpy==1.24.3 \
+            pyproj==3.7.2 \
+            shapely==2.0.1 \
+            pymorphy3==2.0.6 \
+            pymorphy3-dicts-ru==2.4.417150.4580142
+          python -m pip install --require-hashes --no-deps -r requirements-storage.txt
+      - name: Apply release candidate migrations
+        run: python -m geoanalyzer_storage.cli migrate --scope platform --scope soika --scope worker
+      - name: Run storage worker load soak and failure injection tests
+        run: >-
+          python -m pytest -q
+          tests/integration/test_storage_postgres_stage13.py
+          tests/integration/test_worker_queue_stage14.py
+          tests/integration/test_release_candidate_stage16.py
+      - name: Backup and restore release candidate database
+        run: |
+          pg_dump \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --host 127.0.0.1 \
+            --port 5432 \
+            --username geoanalyzer \
+            --dbname geoanalyzer \
+            --file /tmp/stage16-release-candidate.dump
+          dropdb --if-exists --host 127.0.0.1 --port 5432 --username geoanalyzer geoanalyzer_restore
+          createdb --host 127.0.0.1 --port 5432 --username geoanalyzer geoanalyzer_restore
+          pg_restore \
+            --clean \
+            --if-exists \
+            --no-owner \
+            --no-acl \
+            --exit-on-error \
+            --host 127.0.0.1 \
+            --port 5432 \
+            --username geoanalyzer \
+            --dbname geoanalyzer_restore \
+            -- \
+            /tmp/stage16-release-candidate.dump
+          migration_count="$(psql --host 127.0.0.1 --port 5432 --username geoanalyzer --dbname geoanalyzer_restore --tuples-only --no-align --command 'SELECT count(*) FROM ga_meta.schema_migrations')"
+          job_count="$(psql --host 127.0.0.1 --port 5432 --username geoanalyzer --dbname geoanalyzer_restore --tuples-only --no-align --command "SELECT count(*) FROM ga_core.jobs WHERE application_id = 'soika'")"
+          test "$migration_count" -ge 3
+          test "$job_count" -ge 1
+          GEOANALYZER_DATABASE_DSN=postgresql://geoanalyzer:stage16-ci-only@127.0.0.1:5432/geoanalyzer_restore \
+            python -m geoanalyzer_storage.cli check
+
+  controlled-external-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Verify parser controlled-external evidence
+        run: python scripts/verify_stage16_external_evidence.py
+      - name: Verify geolocation qualification evidence
+        run: python scripts/verify_geolocation_evidence.py
+
+  security-dependency-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install pinned security scanners
+        run: python -m pip install --upgrade pip pip-audit==2.10.1 bandit==1.9.4
+      - name: Static security scan
+        run: bandit -r soika_uds geoanalyzer_storage -ll -q
+      - name: Locked dependency vulnerability scan
+        run: pip-audit --locked . --progress-spinner off
