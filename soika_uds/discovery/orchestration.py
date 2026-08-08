@@ -73,15 +73,15 @@ class GeoDiscoveryPreparingHandler:
                     retryable=False,
                     stage=PipelineStage.PREPARING.value,
                     details={
-                        "city": scope.city,
-                        "region": scope.region,
+                        "city": plan.scope.city,
+                        "region": plan.scope.region,
                         "queries": len(plan.queries),
                     },
                 )
             )
         return StageResult(
             output={
-                "territory_context": scope.to_dict(),
+                "territory_context": plan.scope.to_dict(),
                 "discovery_plan": plan.to_dict(),
             },
             processed_items=len(plan.active_candidates),

@@ -22,11 +22,30 @@ def _deduplicate(items: list[DiscoveryQuery], limit: int) -> tuple[DiscoveryQuer
     return tuple(unique.values())
 
 
+def _place_names(scope: GeoScope) -> tuple[str, ...]:
+    value = scope.metadata.get("place_names")
+    if not isinstance(value, list):
+        return ()
+    names: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        cleaned = " ".join(item.split()).strip()
+        if len(cleaned) < 2:
+            continue
+        if cleaned.casefold() in {name.casefold() for name in names}:
+            continue
+        names.append(cleaned)
+        if len(names) >= 6:
+            break
+    return tuple(names)
+
+
 @dataclass(frozen=True, slots=True)
 class GeoQueryBuilder:
     """Create bounded address/city queries; discovery remains region-first."""
 
-    max_queries: int = 32
+    max_queries: int = 40
 
     def __post_init__(self) -> None:
         if not isinstance(self.max_queries, int) or not 8 <= self.max_queries <= 128:
@@ -148,5 +167,22 @@ class GeoQueryBuilder:
                     text=f"{_quote(alias)} {city}",
                     purpose="address_alias",
                 )
+            )
+        for name in _place_names(scope):
+            queries.extend(
+                [
+                    DiscoveryQuery(
+                        text=f"{_quote(name)} {city}",
+                        purpose="nearby_place_web",
+                    ),
+                    DiscoveryQuery(
+                        text=f"{_quote(name)} {city} отзывы",
+                        purpose="nearby_place_reviews",
+                    ),
+                    DiscoveryQuery(
+                        text=f"{_quote(name)} {_quote(location)} {city}",
+                        purpose="nearby_place_address_link",
+                    ),
+                ]
             )
         return _deduplicate(queries, self.max_queries)

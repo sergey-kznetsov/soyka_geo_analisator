@@ -27,8 +27,10 @@ from .collection import (
     DiscoveryCollectionStageHandler,
     source_message_document,
 )
+from .configuration import build_yandex_search_provider_from_env, read_secret_value
 from .engine import DiscoveryEngine
 from .http import StaticHtmlFetcher
+from .map_reviews import MapReviewUnavailableCollector
 from .models import (
     ACTIVE_SOURCE_KINDS,
     DiscoveryPlan,
@@ -43,6 +45,20 @@ from .models import (
     canonical_url,
 )
 from .orchestration import GeoDiscoveryPreparingHandler
+from .places import (
+    CompositePlaceEnricher,
+    OsmPoiEnricher,
+    OverpassTransport,
+    PlaceApiError,
+    PlaceEnricher,
+    PlaceEnrichmentResult,
+    PlaceRecord,
+    StdlibOverpassTransport,
+    StdlibTwoGisTransport,
+    TwoGisPlacesEnricher,
+    TwoGisTransport,
+    build_place_enricher_from_env,
+)
 from .providers import (
     JsonPostTransport,
     SearchProvider,
@@ -80,6 +96,7 @@ __all__ = [
     "CandidateCollectionResult",
     "CandidateCollector",
     "CollectorRouter",
+    "CompositePlaceEnricher",
     "DirectorySourcePolicyResolver",
     "DiscoveryCollectionStageHandler",
     "DiscoveryEngine",
@@ -89,7 +106,14 @@ __all__ = [
     "GeoQueryBuilder",
     "GeoScope",
     "JsonPostTransport",
+    "MapReviewUnavailableCollector",
     "NetworkRobotsEvaluator",
+    "OsmPoiEnricher",
+    "OverpassTransport",
+    "PlaceApiError",
+    "PlaceEnricher",
+    "PlaceEnrichmentResult",
+    "PlaceRecord",
     "PlaywrightBrowserRenderer",
     "PublicWebCollector",
     "RenderedComment",
@@ -109,6 +133,8 @@ __all__ = [
     "StaticHtmlFetcher",
     "StaticSourcePolicyResolver",
     "StdlibJsonPostTransport",
+    "StdlibOverpassTransport",
+    "StdlibTwoGisTransport",
     "TelegramCollector",
     "TelegramCredentials",
     "TelegramGateway",
@@ -118,16 +144,21 @@ __all__ = [
     "TerritoryGeolocationEngine",
     "TerritoryResolutionError",
     "TerritoryResolver",
+    "TwoGisPlacesEnricher",
+    "TwoGisTransport",
     "UnavailableSearchProvider",
     "UnavailableTelegramGateway",
     "YandexSearchProvider",
+    "build_place_enricher_from_env",
     "build_telegram_collector_from_env",
+    "build_yandex_search_provider_from_env",
     "canonical_url",
     "classify_browser_block",
     "geo_evidence",
     "geo_relevance_hint",
     "parse_telegram_target",
     "parse_yandex_xml",
+    "read_secret_value",
     "source_message_document",
     "telegram_search_terms",
 ]
