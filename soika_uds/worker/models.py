@@ -26,8 +26,8 @@ class QueueLeaseError(WorkerError):
     """The worker no longer owns a live queue lease."""
 
 
-class WorkerTimeoutError(WorkerError):
-    """The configured wall-clock deadline expired."""
+class WorkerTimeoutError(BaseException):
+    """Control-flow signal used to escape nested stage Exception handlers."""
 
 
 class WorkerConfigurationError(WorkerError):
