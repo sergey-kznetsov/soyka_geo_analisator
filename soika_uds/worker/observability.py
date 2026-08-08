@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Lock
 from types import TracebackType
-from typing import Any, Protocol
+from typing import Protocol
 
 from .models import new_trace_id, validate_trace_id
 
@@ -82,7 +82,7 @@ def _sanitize(value: object, *, key: str = "") -> object:
         return value
     if isinstance(value, Mapping):
         return {str(k): _sanitize(v, key=str(k)) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [_sanitize(item) for item in value]
     return str(value)
 
