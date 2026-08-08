@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from datetime import UTC
 from threading import Event, Thread
 
 from ..integration import AnalysisRequestV1
@@ -95,7 +96,10 @@ class OrchestratorExecutor:
                 raise JobLeaseError(
                     f"job {analysis_id} is not leased by {orchestrator.worker_id}"
                 )
-            now = orchestrator._now()
+            now = orchestrator.clock()
+            if now.tzinfo is None or now.utcoffset() is None:
+                raise ValueError("orchestrator clock must return timezone-aware datetime")
+            now = now.astimezone(UTC)
             updated = replace(
                 record,
                 updated_at=now,
