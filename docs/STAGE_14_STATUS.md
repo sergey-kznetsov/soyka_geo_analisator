@@ -52,6 +52,10 @@ Infrastructure exhaustion до canonical `FAILED` также восстанов�
 
 Queue-age monitoring использует тот же ready predicate, что и claim: строки с истёкшим lease снова считаются ready и участвуют в `oldest_ready_age_seconds`.
 
+Infrastructure error в polling loop не вызывает tight retry loop: worker применяет штатный `poll_seconds` delay перед следующей попыткой обращения к очереди.
+
+Повторный idempotent submit уже terminal job не создаёт новую queue row и возвращает canonical record без повторного scheduling.
+
 ## Deployment isolation
 
 Добавлен `docker-compose.workers.yml`:
@@ -64,22 +68,28 @@ Queue-age monitoring использует тот же ready predicate, что и
 - `cap_drop: ALL`, `no-new-privileges`;
 - CPU/GPU memory/CPU limits;
 - `pids_limit`;
-- two-minute stop grace;
+- two-minute `stop_grace_period`;
 - worker healthcheck явно использует `127.0.0.1:9090/healthz`.
+
+Grace period исполняется process/container supervisor через Compose `stop_grace_period`; неисполняемая in-process настройка `shutdown_grace_seconds` удалена из `WorkerSettings`, CLI и runtime.
 
 Stable authenticated transport Geo Analyzer ↔ СОЙКА остаётся этапом 15 и не подменяется публичным endpoint на этапе 14.
 
 ## Automated review
 
-Закрыты пять замечаний automated review: четыре P1 и одно P2.
+Закрыты девять замечаний automated review: шесть P1 и три P2.
 
 1. failed canonical job больше не теряет queue routing перед explicit retry;
 2. любая queue-heartbeat ошибка трактуется как lease uncertainty fail-closed;
 3. worker Compose не наследует application healthcheck на 8080 и проверяет собственный probe на 9090;
 4. exhausted infrastructure failure имеет поддерживаемый queue-only recovery path после истечения orchestration lease;
-5. `oldest_ready_age_seconds` учитывает ready rows с истёкшим lease.
+5. `oldest_ready_age_seconds` учитывает ready rows с истёкшим lease;
+6. polling loop делает backoff после infrastructure/claim errors и не создаёт tight retry loop;
+7. terminal idempotent submit не создаёт невыполнимые queue rows;
+8. shutdown grace закреплён на enforceable supervisor layer вместо фиктивной in-process настройки;
+9. stale `shutdown_grace_seconds` удалён из CLI, runtime и тестовых fixtures, поэтому worker startup снова соответствует `WorkerSettings` contract.
 
-Все пять review threads resolved и покрыты unit/live regression tests.
+Все девять review threads resolved и покрыты unit/live regression tests.
 
 ## Проверенная среда
 
@@ -87,7 +97,7 @@ GitHub Actions на финальном кодовом head подтвердил:
 
 - Python compilation — passed;
 - Ruff — passed;
-- 295 deterministic unit/regression tests — passed;
+- 298 deterministic unit/regression tests — passed;
 - 14 live PostgreSQL/PostGIS integration tests — passed;
 - `platform`, `soika` и `worker` migrations — passed;
 - worker migration reapply — no-op;
