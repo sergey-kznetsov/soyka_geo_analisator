@@ -1,6 +1,6 @@
 # Этап 14: серверные worker и эксплуатация
 
-Статус: реализация подготовлена, qualification выполняется в PR.
+Статус: завершён 8 августа 2026 года.
 
 Geo Analyzer 2 не изменялся.
 
@@ -36,11 +36,21 @@ Stage 14 добавляет независимый scope:
 
 `ga_core.job_queue` хранит только scheduling state. Canonical state анализа остаётся в `ga_core.jobs`/`JobRecord`.
 
-## Отказоустойчивость
+Storage package повышен до `geoanalyzer_storage 1.1.0`, SOIKA — до `0.19.0`.
+
+## Отказоустойчивость и recovery
 
 Worker обрабатывает один queue item за раз. Failure текущего executor не завершает polling loop: item получает retry/exhausted state, после чего следующий job может выполняться независимо.
 
 Queue lease и orchestration lease не держат открытую transaction на время ML/OSM обработки. Если worker погибает, истечение lease позволяет другому worker восстановить job.
+
+Любая ошибка queue heartbeat трактуется fail-closed: владение lease считается недоказанным, устанавливаются cancellation/lease-lost state и alert, а worker не выполняет `ack` после executor.
+
+Canonical `FAILED` сохраняет exhausted queue row вместе с CPU/GPU routing. Explicit retry сначала восстанавливает queue item и затем сбрасывает failed `JobRecord`; если canonical reset не проходит, queue возвращается в fail-closed cancelled state.
+
+Infrastructure exhaustion до canonical `FAILED` также восстановим: backend может выполнить queue-only retry после отсутствия или истечения orchestration lease. Живой orchestration lease блокирует такой retry. Pipeline checkpoint state при queue-only recovery не сбрасывается.
+
+Queue-age monitoring использует тот же ready predicate, что и claim: строки с истёкшим lease снова считаются ready и участвуют в `oldest_ready_age_seconds`.
 
 ## Deployment isolation
 
@@ -50,38 +60,53 @@ Queue lease и orchestration lease не держат открытую transactio
 - host ports отсутствуют;
 - доступ только через `geoanalyzer_backend` network;
 - DSN передаётся Docker secret file;
-- read-only filesystem, `cap_drop: ALL`, `no-new-privileges`;
+- read-only filesystem и read-only model volume;
+- `cap_drop: ALL`, `no-new-privileges`;
 - CPU/GPU memory/CPU limits;
 - `pids_limit`;
-- two-minute stop grace.
+- two-minute stop grace;
+- worker healthcheck явно использует `127.0.0.1:9090/healthz`.
 
 Stable authenticated transport Geo Analyzer ↔ СОЙКА остаётся этапом 15 и не подменяется публичным endpoint на этапе 14.
 
-## Версии
+## Automated review
 
-- `soika-uds-development`: `0.19.0`;
-- `geoanalyzer_storage`: `1.1.0`.
+Закрыты пять замечаний automated review: четыре P1 и одно P2.
 
-## Qualification
+1. failed canonical job больше не теряет queue routing перед explicit retry;
+2. любая queue-heartbeat ошибка трактуется как lease uncertainty fail-closed;
+3. worker Compose не наследует application healthcheck на 8080 и проверяет собственный probe на 9090;
+4. exhausted infrastructure failure имеет поддерживаемый queue-only recovery path после истечения orchestration lease;
+5. `oldest_ready_age_seconds` учитывает ready rows с истёкшим lease.
 
-Добавлены deterministic unit/regression tests и live PostgreSQL tests для:
+Все пять review threads resolved и покрыты unit/live regression tests.
 
-- CPU/GPU routing;
-- priority order;
-- concurrent distinct claim;
-- retry/exhaustion/reset;
-- cancellation;
-- isolation failure одного job от следующего;
-- timeout;
-- graceful stop;
-- trace/log/metric contracts;
-- secret-file и memory-limit boundaries;
-- worker migration/index contract.
+## Проверенная среда
 
-Финальные количества тестов и CI gates будут зафиксированы после завершения PR review.
+GitHub Actions на финальном кодовом head подтвердил:
+
+- Python compilation — passed;
+- Ruff — passed;
+- 295 deterministic unit/regression tests — passed;
+- 14 live PostgreSQL/PostGIS integration tests — passed;
+- `platform`, `soika` и `worker` migrations — passed;
+- worker migration reapply — no-op;
+- concurrent workers claim разные queue rows;
+- CPU/GPU routing и priority order — passed;
+- retry/exhaustion/cancel/expired-lease recovery — passed;
+- `poetry.lock` consistency — passed;
+- worker Compose private-network/isolation contract — passed;
+- worker healthcheck port 9090 contract — passed;
+- CPU Docker image build и storage/worker import — passed;
+- CPU container `/healthz` и `/readyz` — passed;
+- GPU target build — passed.
 
 ## Критерий этапа
 
-Критерий считается выполненным после зелёного live gate и review: отказ одного задания не прекращает worker polling loop и не изменяет состояние других заданий; Geo Analyzer backend взаимодействует только через существующий canonical orchestration state, поэтому ошибка SOIKA job не должна нарушать основной отчёт Geo Analyzer.
+Критерий этапа 14 выполнен: ошибка, timeout или исчерпание попыток одного задания изолируются внутри worker/queue boundary и не прекращают polling loop; другие задания продолжают выполняться независимо.
+
+Canonical analysis state остаётся в существующем orchestration/storage contract, а worker runtime не предоставляет отдельного публичного API. Поэтому отказ SOIKA job не требует менять основной отчёт Geo Analyzer и не создаёт обходного transport до этапа 15.
+
+Следующий технический этап по плану — этап 15: интеграция СОЙКИ в Geo Analyzer.
 
 Эксплуатационная документация: `docs/WORKER_RUNTIME.md`.
