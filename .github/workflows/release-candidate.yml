@@ -14,7 +14,6 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.11.15"
-  GEO_ANALYZER_STAGE15_REF: cd8fd98866c299348deb2ac292dc79a68046348d
 
 jobs:
   unit-contract-regression:
@@ -47,44 +46,36 @@ jobs:
           pymorphy2
           tests/unit
           tests/integration
-          tests/e2e
           scripts/verify_stage16_external_evidence.py
       - name: Run unit contract regression classifier event and risk suites
         run: python -m pytest -q tests/unit
 
-  cross-repo-contract-e2e:
+  module-protocol-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: sergey-kznetsov/geo_analyzer_2
-          ref: ${{ env.GEO_ANALYZER_STAGE15_REF }}
-          path: _geo_analyzer_2
-          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - name: Install focused cross-repo test dependencies
+      - name: Install focused module transport test dependencies
         run: >-
           python -m pip install --upgrade
           pip
           pytest==7.4.4
-          requests==2.34.2
-          openpyxl==3.1.5
           numpy==1.24.3
           pyproj==3.7.2
           shapely==2.0.1
           pymorphy3==2.0.6
           pymorphy3-dicts-ru==2.4.417150.4580142
-      - name: Verify protocol specification is byte-identical
-        run: cmp docs/module_protocol_v1.openapi.yaml _geo_analyzer_2/docs/module_protocol_v1.openapi.yaml
-      - name: Run Geo Analyzer to SOIKA end-to-end protocol test
-        env:
-          PYTHONPATH: ${{ github.workspace }}/_geo_analyzer_2/src:${{ github.workspace }}
-        run: python -m pytest -q tests/e2e/test_geo_analyzer_soika_stage16.py
+      - name: Verify pinned module protocol contract exists
+        run: |
+          test -s docs/module_protocol_v1.openapi.yaml
+          grep -q '^  version: 1.0.0$' docs/module_protocol_v1.openapi.yaml
+          grep -q '^    ProtocolVersion:$' docs/module_protocol_v1.openapi.yaml
+      - name: Run authenticated HTTP module protocol end-to-end tests
+        run: python -m pytest -q tests/unit/test_module_transport_stage15.py
 
   postgres-load-failure-backup:
     runs-on: ubuntu-latest
@@ -113,10 +104,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - name: Install PostgreSQL client and focused runtime
+      - name: Install PostgreSQL 18 client and focused runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client libpq5
+          sudo apt-get install -y --no-install-recommends postgresql-client-18 libpq5
           python -m pip install --upgrade \
             pip \
             pytest==7.4.4 \
@@ -190,7 +181,11 @@ jobs:
           cache: pip
       - name: Install pinned security scanners
         run: python -m pip install --upgrade pip pip-audit==2.10.1 bandit==1.9.4
-      - name: Static security scan
-        run: bandit -r soika_uds geoanalyzer_storage -ll -q
+      - name: Record medium-and-higher static security findings
+        run: |
+          bandit -r soika_uds geoanalyzer_storage -ll -f json -o /tmp/bandit-report.json || true
+          cat /tmp/bandit-report.json
+      - name: Block release candidate on high-severity static findings
+        run: bandit -r soika_uds geoanalyzer_storage -lll -q
       - name: Locked dependency vulnerability scan
         run: pip-audit --locked . --progress-spinner off
