@@ -31,7 +31,10 @@ def _provider_state(error: SearchProviderError) -> SourceState:
     return SourceState.UNAVAILABLE
 
 
-def _enrich_scope(scope: GeoScope, enricher: PlaceEnricher) -> tuple[GeoScope, tuple[SourceOutcome, ...]]:
+def _enrich_scope(
+    scope: GeoScope,
+    enricher: PlaceEnricher,
+) -> tuple[GeoScope, tuple[SourceOutcome, ...]]:
     result = enricher.enrich(scope)
     metadata = dict(scope.metadata)
     metadata["places"] = [item.to_dict() for item in result.places]
