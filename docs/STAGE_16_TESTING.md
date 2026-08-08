@@ -16,31 +16,36 @@ Geo Analyzer 2 на этом этапе не изменяется. Его уни
 - полный `tests/unit`: unit, contracts, deterministic regressions, classifier, event и risk-formula tests;
 - authenticated HTTP module protocol end-to-end проверки `submit/status/result`, partial result, validation и error semantics;
 - controlled-external evidence по источникам `vk`, `ok`, `local-media`, `municipal-public`, `dzen`, `pikabu`, `rutube`;
-- geolocation qualification evidence;
+- geolocation qualification evidence и отдельная live target-city qualification;
 - PostgreSQL/PostGIS migrations и integration tests;
 - параллельный queue load test;
 - повторные soak cycles;
 - failure injection через истечение worker lease и восстановление задания другим worker;
 - реальный `pg_dump`/`pg_restore` с последующей проверкой восстановленной БД;
 - Bandit static security scan;
-- `pip-audit` по точным версиям main-группы из `poetry.lock` и отдельно по `requirements-storage.txt`.
+- `pip-audit` по точным версиям main-группы из `poetry.lock` и отдельно по `requirements-storage.txt`;
+- CPU/GPU Docker build, runtime import checks и health/readiness.
 
 Точные версии main-зависимостей для `pip-audit` экспортируются из Poetry lock скриптом `scripts/export_stage16_locked_requirements.py`. После Stage 17 exporter поддерживает platform-specific Poetry entries и group-specific markers, при этом остаётся fail-closed для неоднозначных unmarked версий.
 
 ## Результаты после Stage 17 remediation
 
-Подтверждённый повторный release-candidate test surface показал:
+Перед интеграцией Stage 17 в Stage 16 на одном объединённом Stage 16+17 head были подтверждены:
 
+- `release-candidate` — success;
+- `quality` — success целиком, включая CPU/GPU Docker build/start/health;
+- live `geolocation-qualification` — success;
 - 318 unit/contract/regression tests — passed;
 - 8 module HTTP protocol tests — passed;
 - 17 PostgreSQL/PostGIS, worker queue, load/soak и failure-injection tests — passed;
 - logical backup/restore PostgreSQL 18 + PostGIS — passed;
 - controlled-external parser evidence — passed;
-- geolocation qualification evidence verification — passed;
 - Bandit HIGH severity gate — passed, HIGH findings: 0;
 - storage dependency audit (`requirements-storage.txt`) — passed;
 - locked main runtime dependency audit — passed, известных уязвимостей не найдено;
 - итоговый dependency security gate — passed.
+
+Live geolocation qualification после исправления house ranking также прошла: `approved_for_production=true` для профиля `soika-geolocation-ru-v1`, within-tolerance rate `0.875`, resolution rate `0.958333`, extraction exact rate `0.958333`, kind accuracy `0.958333`, median distance `137.009` м, p95 `1146.096` м. Все три target-city gates проходят.
 
 Load test создаёт 64 задания и параллельно разбирает их восемью worker-потоками; каждое задание должно быть получено ровно один раз. Soak test выполняет 10 последовательных циклов по 8 заданий и после каждого цикла проверяет здоровье очереди. Failure injection принудительно просрочивает lease занятого задания и проверяет, что новый worker может безопасно его получить, а прежний владелец больше не может подтвердить выполнение.
 
@@ -54,7 +59,7 @@ Backup/restore выполняется клиентскими утилитами 
 
 Внешний XML переведён на `defusedxml`, controlled external URL boundary ограничена HTTPS, а локальный probe server по умолчанию использует loopback. Оставшиеся Bandit B608 medium findings в worker queue относятся к статическим внутренним спискам колонок; фактические значения передаются через psycopg parameters `%s` и не интерполируются в структуру SQL.
 
-Повторная live geolocation qualification после обновления lock дополнительно выявила ranking defect для house candidates: `amenity/building` мог вытеснить структурированное `address.road` при сравнении названия улицы. Stage 17 исправляет house ranking так, чтобы точная structured road match имела приоритет без снижения qualification thresholds.
+Повторная live geolocation qualification после обновления lock дополнительно выявила ranking defect для house candidates: `amenity/building` мог вытеснить структурированное `address.road` при сравнении названия улицы. Stage 17 исправил house ranking так, чтобы точная structured road match имела приоритет без снижения qualification thresholds.
 
 ## Ограничение model qualification
 
@@ -62,6 +67,8 @@ Backup/restore выполняется клиентскими утилитами 
 
 Это ограничение не делает release-candidate gate красным: неподтверждённые model-backed paths должны оставаться закрытыми. Production использование конкретной ML-модели разрешается только после прохождения её отдельного qualification gate.
 
+Квалифицированный geolocation-профиль Natasha/Nominatim является отдельным qualification domain и не означает approval legacy category/topic classification models.
+
 ## Критерий завершения
 
-Обязательные Stage 16 test/security contours после Stage 17 remediation проходят. Завершение Stage 17 требует финального прохождения repository quality/geolocation workflows на одном head commit, проверки automated review и интеграции remediation поверх Stage 16 branch. После этого Stage 16 и Stage 17 можно объединять в `main`, сохраняя fail-closed model restriction.
+Stage 16 criterion выполнен на объединённом Stage 16+17 release candidate: обязательные test/security/backup/load/failure/transport/geolocation/Docker contours проходят. PR #25 с исправлениями Stage 17 интегрирован в Stage 16. Перед merge PR #24 в `main` те же обязательные workflows повторно запускаются на финальном head с документацией завершения; merge разрешён только при полном green и отсутствии нерешённых review findings.
