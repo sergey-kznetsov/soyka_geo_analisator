@@ -54,6 +54,7 @@ jobs:
           factfinder/src/text_classifier_topics.py
           tests/unit
           tests/integration/test_storage_postgres_stage13.py
+          tests/integration/test_worker_queue_stage14.py
 
       - name: Run deterministic unit tests
         run: python -m pytest -q tests/unit
@@ -89,7 +90,7 @@ jobs:
         env:
           POSTGRES_DB: geoanalyzer
           POSTGRES_USER: geoanalyzer
-          POSTGRES_PASSWORD: stage13-ci-only
+          POSTGRES_PASSWORD: stage14-ci-only
         ports:
           - 5432:5432
         options: >-
@@ -99,8 +100,8 @@ jobs:
           --health-retries 12
 
     env:
-      GEOANALYZER_DATABASE_DSN: postgresql://geoanalyzer:stage13-ci-only@127.0.0.1:5432/geoanalyzer
-      GEOANALYZER_TEST_DATABASE_DSN: postgresql://geoanalyzer:stage13-ci-only@127.0.0.1:5432/geoanalyzer
+      GEOANALYZER_DATABASE_DSN: postgresql://geoanalyzer:stage14-ci-only@127.0.0.1:5432/geoanalyzer
+      GEOANALYZER_TEST_DATABASE_DSN: postgresql://geoanalyzer:stage14-ci-only@127.0.0.1:5432/geoanalyzer
 
     steps:
       - uses: actions/checkout@v4
@@ -126,11 +127,14 @@ jobs:
 
       - name: Apply and inspect storage migrations
         run: |
-          python -m geoanalyzer_storage.cli migrate --scope platform --scope soika
+          python -m geoanalyzer_storage.cli migrate --scope platform --scope soika --scope worker
           python -m geoanalyzer_storage.cli check
 
       - name: Run live PostgreSQL PostGIS integration tests
-        run: python -m pytest -q tests/integration/test_storage_postgres_stage13.py
+        run: >-
+          python -m pytest -q
+          tests/integration/test_storage_postgres_stage13.py
+          tests/integration/test_worker_queue_stage14.py
 
   docker-environment:
     runs-on: ubuntu-latest
@@ -139,15 +143,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate worker Compose isolation contract
+        run: |
+          printf '%s\n' 'postgresql://example.invalid/geoanalyzer' > /tmp/stage14-worker-dsn
+          SOIKA_WORKER_EXECUTOR=example.module:factory \
+          GEOANALYZER_DATABASE_DSN_FILE=/tmp/stage14-worker-dsn \
+            docker compose -f docker-compose.workers.yml config >/tmp/stage14-workers.yml
+          ! grep -qE '^[[:space:]]+ports:' /tmp/stage14-workers.yml
+          grep -q 'mem_limit:' /tmp/stage14-workers.yml
+          grep -q 'geoanalyzer_backend' /tmp/stage14-workers.yml
+          grep -q '127.0.0.1:9090/healthz' /tmp/stage14-workers.yml
+          ! grep -q '127.0.0.1:8080/healthz' /tmp/stage14-workers.yml
+
       - name: Build CPU image
         run: docker build --target cpu --tag soika-uds:cpu .
 
-      - name: Validate storage runtime in CPU image
+      - name: Validate storage and worker runtime in CPU image
         run: >-
           docker run --rm --entrypoint python soika-uds:cpu -c
-          "import geoanalyzer_storage, psycopg, psycopg_pool;
-          assert geoanalyzer_storage.__version__ == '1.0.0';
-          assert psycopg.__version__ == '3.3.4'"
+          "import geoanalyzer_storage, psycopg, psycopg_pool, soika_uds.worker;
+          assert geoanalyzer_storage.__version__ == '1.1.0';
+          assert psycopg.__version__ == '3.3.4';
+          assert soika_uds.worker.ComputeClass.CPU.value == 'cpu'"
 
       - name: Start CPU environment
         run: docker run --detach --name soika-cpu --publish 18080:8080 soika-uds:cpu
