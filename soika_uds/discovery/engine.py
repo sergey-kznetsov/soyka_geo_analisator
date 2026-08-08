@@ -39,9 +39,13 @@ class DiscoveryEngine:
     max_candidates: int = 250
 
     def __post_init__(self) -> None:
-        if not isinstance(self.results_per_query, int) or not 1 <= self.results_per_query <= 100:
+        if not isinstance(self.results_per_query, int) or not (
+            1 <= self.results_per_query <= 100
+        ):
             raise ValueError("results_per_query must be in [1, 100]")
-        if not isinstance(self.max_candidates, int) or not 10 <= self.max_candidates <= 2000:
+        if not isinstance(self.max_candidates, int) or not (
+            10 <= self.max_candidates <= 2000
+        ):
             raise ValueError("max_candidates must be in [10, 2000]")
 
     def plan(self, scope: GeoScope) -> DiscoveryPlan:
@@ -103,7 +107,8 @@ class DiscoveryEngine:
                             state=SourceState.BLOCKED,
                             reason_code=SourceReasonCode.SOURCE_OUT_OF_SCOPE,
                             reason=(
-                                f"{kind.value} is outside the active geo-first collection perimeter"
+                                f"{kind.value} is outside the active geo-first "
+                                "collection perimeter"
                             ),
                             attempted_urls=(candidate.url,),
                             details={"query": candidate.query},
