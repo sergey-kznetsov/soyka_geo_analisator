@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: I001
+
 from datetime import UTC, datetime
 
 from soika_uds.contracts import SourceMessage, TerritoryContext
