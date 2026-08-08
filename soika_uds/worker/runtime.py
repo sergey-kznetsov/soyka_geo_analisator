@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from threading import Event, Thread
 from typing import Protocol
 
+from ..contracts import JobStatus
 from .models import (
     QueueItem,
     QueueLeaseError,
@@ -263,6 +264,28 @@ class WorkerRuntime:
                 )
             )
 
+    def _park_domain_failure(self, item: QueueItem) -> None:
+        self.queue.release(
+            item.analysis_id,
+            worker_id=self.settings.worker_id,
+            retryable=False,
+            retry_delay_seconds=0.0,
+            error={"code": "ANALYSIS_FAILED"},
+        )
+        self.metrics.inc("jobs_domain_failed_total")
+        self.metrics.inc("jobs_exhausted_total")
+        self._consecutive_failures = 0
+        log_event(
+            self.logger,
+            logging.INFO,
+            "worker.job.domain_failed",
+            "analysis reached a canonical failed state and awaits explicit retry",
+            analysis_id=item.analysis_id,
+            worker_id=self.settings.worker_id,
+            trace_id=item.trace_id,
+            attempt=item.attempt,
+        )
+
     def run_once(self) -> bool:
         if self.stopping:
             return False
@@ -323,24 +346,27 @@ class WorkerRuntime:
                     "attempt": item.attempt,
                 },
             ), _wall_deadline(self.settings.wall_timeout_seconds):
-                self.executor(context)
+                result = self.executor(context)
             if lease_lost.is_set():
                 raise QueueLeaseError(
                     f"queue lease for {item.analysis_id!r} was lost during execution"
                 )
-            self.queue.ack(item.analysis_id, worker_id=self.settings.worker_id)
-            self.metrics.inc("jobs_completed_total")
-            self._consecutive_failures = 0
-            log_event(
-                self.logger,
-                logging.INFO,
-                "worker.job.completed",
-                "job left the worker boundary cleanly",
-                analysis_id=item.analysis_id,
-                worker_id=self.settings.worker_id,
-                trace_id=item.trace_id,
-                cancelled=cancellation.is_set(),
-            )
+            if getattr(result, "status", None) == JobStatus.FAILED:
+                self._park_domain_failure(item)
+            else:
+                self.queue.ack(item.analysis_id, worker_id=self.settings.worker_id)
+                self.metrics.inc("jobs_completed_total")
+                self._consecutive_failures = 0
+                log_event(
+                    self.logger,
+                    logging.INFO,
+                    "worker.job.completed",
+                    "job left the worker boundary cleanly",
+                    analysis_id=item.analysis_id,
+                    worker_id=self.settings.worker_id,
+                    trace_id=item.trace_id,
+                    cancelled=cancellation.is_set(),
+                )
         except WorkerTimeoutError as error:
             self._release_failure(
                 item,
