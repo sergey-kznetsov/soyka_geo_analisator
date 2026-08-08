@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC
 from threading import Event, Thread
@@ -64,10 +65,8 @@ class WorkerControl:
         try:
             return self.orchestrator.retry_failed(analysis_id)
         except BaseException:
-            try:
+            with suppress(Exception):
                 self.queue.request_cancel(analysis_id)
-            except Exception:
-                pass
             raise
 
 
