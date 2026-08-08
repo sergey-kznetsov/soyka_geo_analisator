@@ -24,6 +24,11 @@ _TERMINAL_STATUSES = (
     "failed",
     "cancelled",
 )
+_REAPABLE_STATUSES = (
+    "completed",
+    "completed_with_warnings",
+    "cancelled",
+)
 
 
 class JobQueue(Protocol):
@@ -205,7 +210,6 @@ class PostgresJobQueue:
         worker_id = validate_worker_id(worker_id)
         compute_class = ComputeClass(compute_class)
         lease_seconds = self._positive_seconds(lease_seconds, "lease_seconds")
-        terminal = _TERMINAL_STATUSES
         with self.database.connection() as connection:
             row = connection.execute(
                 "WITH candidate AS ("
@@ -237,7 +241,7 @@ class PostgresJobQueue:
                 (
                     self.application,
                     compute_class.value,
-                    list(terminal),
+                    list(_TERMINAL_STATUSES),
                     worker_id,
                     lease_seconds,
                 ),
@@ -404,7 +408,7 @@ class PostgresJobQueue:
                 "AND j.application_id = q.application_id "
                 "AND j.analysis_id = q.analysis_id "
                 "AND j.status = ANY(%s)",
-                (self.application, list(_TERMINAL_STATUSES)),
+                (self.application, list(_REAPABLE_STATUSES)),
             )
             return int(cursor.rowcount)
 
