@@ -29,8 +29,9 @@ Geo Analyzer 2 на этом этапе не изменяется. Его уни
 
 ## Результаты release candidate
 
-На последнем полном прогоне до фиксации найденных security-блокеров:
+Финальный квалификационный прогон Stage 16 показал:
 
+- основной существующий workflow `quality` — passed целиком, включая unit/static, live PostgreSQL/PostGIS, dependency lock и Docker CPU/GPU environment;
 - 306 unit/contract/regression tests — passed;
 - 8 module HTTP protocol tests — passed;
 - 17 PostgreSQL/PostGIS, worker queue, load/soak и failure-injection tests — passed;
@@ -38,7 +39,9 @@ Geo Analyzer 2 на этом этапе не изменяется. Его уни
 - controlled-external parser evidence — passed;
 - geolocation qualification evidence — passed;
 - Bandit HIGH severity gate — passed, HIGH findings: 0;
-- dependency security gate — **failed**.
+- storage dependency audit (`requirements-storage.txt`) — passed, известных уязвимостей не найдено;
+- locked main runtime dependency audit — **failed**: 90 известных уязвимостей в 12 пакетах;
+- итоговый dependency security gate — **failed**, как и требуется для блокировки release candidate.
 
 Load test создаёт 64 задания и параллельно разбирает их восемью worker-потоками; каждое задание должно быть получено ровно один раз. Soak test выполняет 10 последовательных циклов по 8 заданий и после каждого цикла проверяет здоровье очереди. Failure injection принудительно просрочивает lease занятого задания и проверяет, что новый worker может безопасно его получить, а прежний владелец больше не может подтвердить выполнение.
 
