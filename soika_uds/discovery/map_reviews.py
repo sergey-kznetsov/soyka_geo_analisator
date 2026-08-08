@@ -5,7 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .collection import CandidateCollectionResult
-from .models import GeoScope, SourceCandidate, SourceKind, SourceOutcome, SourceReasonCode, SourceState
+from .models import (
+    GeoScope,
+    SourceCandidate,
+    SourceKind,
+    SourceOutcome,
+    SourceReasonCode,
+    SourceState,
+)
 
 
 @dataclass(frozen=True, slots=True)
