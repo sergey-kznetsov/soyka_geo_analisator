@@ -15,11 +15,11 @@ from soika_uds.orchestration import (
 )
 from soika_uds.worker import ComputeClass, OrchestratorExecutor, WorkerControl
 from soika_uds.worker.cli import (
+    build_parser,
     _postgres_application_name,
     _read_secret_file,
     _settings as _cli_settings,
     _validate_memory_limit,
-    build_parser,
 )
 from soika_uds.worker.models import WorkerConfigurationError
 
