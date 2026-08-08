@@ -110,7 +110,6 @@ ACTIVE_SOURCE_KINDS = frozenset(
         SourceKind.LOCAL_MEDIA,
         SourceKind.MUNICIPAL,
         SourceKind.LOCAL_FORUM,
-        SourceKind.TELEGRAM,
         SourceKind.PIKABU,
         SourceKind.DZEN,
         SourceKind.YANDEX_MAPS,
@@ -152,12 +151,15 @@ class SourceReasonCode(str, Enum):
     SOURCE_CONFIGURATION_MISSING = "SOURCE_CONFIGURATION_MISSING"
     SEARCH_PROVIDER_UNAVAILABLE = "SEARCH_PROVIDER_UNAVAILABLE"
     SOURCE_OUT_OF_SCOPE = "SOURCE_OUT_OF_SCOPE"
+    TERMS_RESTRICTED = "TERMS_RESTRICTED"
     TERRITORY_UNRESOLVED = "TERRITORY_UNRESOLVED"
     UNKNOWN = "UNKNOWN"
 
 
 @dataclass(frozen=True, slots=True)
 class GeoScope:
+    """Resolved territory used as the mandatory boundary for all discovery."""
+
     raw_address: str
     city: str
     region: str | None
@@ -168,60 +170,60 @@ class GeoScope:
     latitude: float
     precision: str
     confidence: float
-    candidate_id: str
-    label: str
+    candidate_id: str | None = None
+    label: str | None = None
     osm_type: str | None = None
     osm_id: int | None = None
     aliases: tuple[str, ...] = ()
-    metadata: Mapping[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
-        required_fields = (
-            "raw_address",
-            "city",
-            "precision",
-            "candidate_id",
-            "label",
+        object.__setattr__(self, "raw_address", _required_text(self.raw_address, "raw_address"))
+        object.__setattr__(self, "city", _required_text(self.city, "city"))
+        object.__setattr__(self, "region", _optional_text(self.region, "region"))
+        object.__setattr__(self, "district", _optional_text(self.district, "district"))
+        object.__setattr__(self, "street", _optional_text(self.street, "street"))
+        object.__setattr__(
+            self,
+            "house_number",
+            _optional_text(self.house_number, "house_number"),
         )
-        for name in required_fields:
-            value = _required_text(getattr(self, name), name)
-            object.__setattr__(self, name, value)
-        optional_fields = ("region", "district", "street", "house_number", "osm_type")
-        for name in optional_fields:
-            value = _optional_text(getattr(self, name), name)
-            object.__setattr__(self, name, value)
-
         longitude = _number(self.longitude, "longitude")
         latitude = _number(self.latitude, "latitude")
-        confidence = _number(self.confidence, "confidence")
         if not -180 <= longitude <= 180:
             raise ValueError("longitude must be in [-180, 180]")
         if not -90 <= latitude <= 90:
             raise ValueError("latitude must be in [-90, 90]")
-        if not 0 <= confidence <= 1:
-            raise ValueError("confidence must be in [0, 1]")
         object.__setattr__(self, "longitude", longitude)
         object.__setattr__(self, "latitude", latitude)
+        object.__setattr__(self, "precision", _required_text(self.precision, "precision"))
+        confidence = _number(self.confidence, "confidence")
+        if not 0 <= confidence <= 1:
+            raise ValueError("confidence must be in [0, 1]")
         object.__setattr__(self, "confidence", confidence)
-
+        object.__setattr__(
+            self,
+            "candidate_id",
+            _optional_text(self.candidate_id, "candidate_id"),
+        )
+        object.__setattr__(self, "label", _optional_text(self.label, "label"))
+        object.__setattr__(self, "osm_type", _optional_text(self.osm_type, "osm_type"))
         if self.osm_id is not None and (
-            not isinstance(self.osm_id, int) or self.osm_id < 1
+            isinstance(self.osm_id, bool) or not isinstance(self.osm_id, int) or self.osm_id <= 0
         ):
             raise ValueError("osm_id must be a positive integer")
         aliases = tuple(
             dict.fromkeys(
-                _required_text(item, "aliases[]") for item in self.aliases
+                _required_text(alias, "aliases[]")
+                for alias in self.aliases
+                if isinstance(alias, str) and alias.strip()
             )
         )
         object.__setattr__(self, "aliases", aliases)
-        object.__setattr__(
-            self,
-            "metadata",
-            _freeze_mapping(self.metadata, "metadata"),
-        )
+        object.__setattr__(self, "metadata", _freeze_mapping(self.metadata, "metadata"))
 
     def to_dict(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
+        return {
             "raw_address": self.raw_address,
             "city": self.city,
             "region": self.region,
@@ -236,14 +238,11 @@ class GeoScope:
             "confidence": self.confidence,
             "candidate_id": self.candidate_id,
             "label": self.label,
+            "osm_type": self.osm_type,
+            "osm_id": self.osm_id,
             "aliases": list(self.aliases),
             "metadata": dict(self.metadata),
         }
-        if self.osm_type is not None:
-            payload["osm_type"] = self.osm_type
-        if self.osm_id is not None:
-            payload["osm_id"] = self.osm_id
-        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,76 +252,48 @@ class DiscoveryQuery:
     target_kind: SourceKind | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "text",
-            _required_text(self.text, "query.text"),
-        )
-        object.__setattr__(
-            self,
-            "purpose",
-            _required_text(self.purpose, "query.purpose"),
-        )
-        if self.target_kind is not None and not isinstance(
-            self.target_kind,
-            SourceKind,
-        ):
-            object.__setattr__(
-                self,
-                "target_kind",
-                SourceKind(self.target_kind),
-            )
+        object.__setattr__(self, "text", _required_text(self.text, "text"))
+        object.__setattr__(self, "purpose", _required_text(self.purpose, "purpose"))
+        if self.target_kind is not None and not isinstance(self.target_kind, SourceKind):
+            raise TypeError("target_kind must be SourceKind or None")
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "text": self.text,
             "purpose": self.purpose,
-            "target_kind": (
-                self.target_kind.value if self.target_kind else None
-            ),
+            "target_kind": self.target_kind.value if self.target_kind else None,
         }
 
 
 @dataclass(frozen=True, slots=True)
 class SearchHit:
-    query: str
-    title: str
+    provider: str
     url: str
-    snippet: str = ""
-    rank: int = 0
-    provider: str = ""
+    title: str
+    snippet: str
+    query: str
+    rank: int
+    metadata: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "query",
-            _required_text(self.query, "hit.query"),
-        )
-        object.__setattr__(
-            self,
-            "title",
-            _required_text(self.title, "hit.title"),
-        )
+        object.__setattr__(self, "provider", _required_text(self.provider, "provider"))
         object.__setattr__(self, "url", canonical_url(self.url))
-        if not isinstance(self.snippet, str):
-            raise ValueError("hit.snippet must be a string")
-        object.__setattr__(self, "snippet", self.snippet.strip())
-        if not isinstance(self.rank, int) or self.rank < 0:
-            raise ValueError("hit.rank must be non-negative")
-        object.__setattr__(
-            self,
-            "provider",
-            _required_text(self.provider, "hit.provider"),
-        )
+        object.__setattr__(self, "title", _required_text(self.title, "title"))
+        object.__setattr__(self, "snippet", str(self.snippet or "").strip())
+        object.__setattr__(self, "query", _required_text(self.query, "query"))
+        if not isinstance(self.rank, int) or isinstance(self.rank, bool) or self.rank < 1:
+            raise ValueError("rank must be a positive integer")
+        object.__setattr__(self, "metadata", _freeze_mapping(self.metadata, "metadata"))
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "query": self.query,
-            "title": self.title,
-            "url": self.url,
-            "snippet": self.snippet,
-            "rank": self.rank,
             "provider": self.provider,
+            "url": self.url,
+            "title": self.title,
+            "snippet": self.snippet,
+            "query": self.query,
+            "rank": self.rank,
+            "metadata": dict(self.metadata),
         }
 
 
@@ -335,42 +306,41 @@ class SourceCandidate:
     title: str
     discovered_by: str
     query: str
-    geo_evidence: tuple[str, ...] = ()
+    snippet: str = ""
     active: bool = True
-    metadata: Mapping[str, Any] = field(default_factory=dict)
+    geo_evidence: tuple[str, ...] = ()
+    metadata: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
-        candidate_id = _required_text(self.candidate_id, "candidate_id")
-        object.__setattr__(self, "candidate_id", candidate_id)
+        object.__setattr__(self, "candidate_id", _required_text(self.candidate_id, "candidate_id"))
         if not isinstance(self.kind, SourceKind):
-            object.__setattr__(self, "kind", SourceKind(self.kind))
-
+            raise TypeError("kind must be SourceKind")
         url = canonical_url(self.url)
         object.__setattr__(self, "url", url)
-        host = urlsplit(url).hostname or ""
-        expected_domain = host.encode("idna").decode("ascii").lower()
-        domain = _required_text(self.domain, "domain").lower()
-        if domain != expected_domain:
-            raise ValueError("candidate domain must equal URL hostname")
+        parsed = urlsplit(url)
+        domain = _required_text(self.domain, "domain").encode("idna").decode("ascii").lower()
+        if domain != parsed.hostname:
+            raise ValueError("domain must match URL hostname")
         object.__setattr__(self, "domain", domain)
-
-        for name in ("title", "discovered_by", "query"):
-            value = _required_text(getattr(self, name), name)
-            object.__setattr__(self, name, value)
+        object.__setattr__(self, "title", _required_text(self.title, "title"))
+        object.__setattr__(
+            self,
+            "discovered_by",
+            _required_text(self.discovered_by, "discovered_by"),
+        )
+        object.__setattr__(self, "query", _required_text(self.query, "query"))
+        object.__setattr__(self, "snippet", str(self.snippet or "").strip())
+        if not isinstance(self.active, bool):
+            raise TypeError("active must be bool")
         evidence = tuple(
             dict.fromkeys(
                 _required_text(item, "geo_evidence[]")
                 for item in self.geo_evidence
+                if isinstance(item, str) and item.strip()
             )
         )
         object.__setattr__(self, "geo_evidence", evidence)
-        if not isinstance(self.active, bool):
-            raise ValueError("candidate.active must be boolean")
-        object.__setattr__(
-            self,
-            "metadata",
-            _freeze_mapping(self.metadata, "metadata"),
-        )
+        object.__setattr__(self, "metadata", _freeze_mapping(self.metadata, "metadata"))
 
     @classmethod
     def from_hit(
@@ -379,21 +349,23 @@ class SourceCandidate:
         *,
         kind: SourceKind,
         active: bool,
-        geo_evidence: Sequence[str] = (),
+        geo_evidence: tuple[str, ...],
     ) -> SourceCandidate:
-        digest = hashlib.sha256(hit.url.encode("utf-8")).hexdigest()[:24]
-        domain = urlsplit(hit.url).hostname or ""
+        digest = hashlib.sha256(
+            f"{kind.value}\n{hit.url}".encode("utf-8")
+        ).hexdigest()[:24]
         return cls(
             candidate_id=f"web:{digest}",
             kind=kind,
             url=hit.url,
-            domain=domain,
+            domain=urlsplit(hit.url).hostname or "",
             title=hit.title,
             discovered_by=hit.provider,
             query=hit.query,
-            geo_evidence=tuple(geo_evidence),
+            snippet=hit.snippet,
             active=active,
-            metadata={"snippet": hit.snippet, "rank": hit.rank},
+            geo_evidence=geo_evidence,
+            metadata=hit.metadata,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -405,8 +377,9 @@ class SourceCandidate:
             "title": self.title,
             "discovered_by": self.discovered_by,
             "query": self.query,
-            "geo_evidence": list(self.geo_evidence),
+            "snippet": self.snippet,
             "active": self.active,
+            "geo_evidence": list(self.geo_evidence),
             "metadata": dict(self.metadata),
         }
 
@@ -421,45 +394,26 @@ class SourceOutcome:
     attempted_urls: tuple[str, ...] = ()
     messages_collected: int = 0
     relevant_messages: int = 0
-    details: Mapping[str, Any] = field(default_factory=dict)
+    details: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
-        source_id = _required_text(self.source_id, "source_id")
-        object.__setattr__(self, "source_id", source_id)
+        object.__setattr__(self, "source_id", _required_text(self.source_id, "source_id"))
         if not isinstance(self.kind, SourceKind):
-            object.__setattr__(self, "kind", SourceKind(self.kind))
+            raise TypeError("kind must be SourceKind")
         if not isinstance(self.state, SourceState):
-            object.__setattr__(self, "state", SourceState(self.state))
+            raise TypeError("state must be SourceState")
         if not isinstance(self.reason_code, SourceReasonCode):
-            object.__setattr__(
-                self,
-                "reason_code",
-                SourceReasonCode(self.reason_code),
-            )
-        object.__setattr__(
-            self,
-            "reason",
-            _required_text(self.reason, "reason"),
-        )
-        urls = tuple(canonical_url(item) for item in self.attempted_urls)
-        object.__setattr__(
-            self,
-            "attempted_urls",
-            tuple(dict.fromkeys(urls)),
-        )
+            raise TypeError("reason_code must be SourceReasonCode")
+        object.__setattr__(self, "reason", _required_text(self.reason, "reason"))
+        urls = tuple(dict.fromkeys(canonical_url(url) for url in self.attempted_urls))
+        object.__setattr__(self, "attempted_urls", urls)
         for name in ("messages_collected", "relevant_messages"):
             value = getattr(self, name)
-            if not isinstance(value, int) or value < 0:
-                raise ValueError(f"{name} must be non-negative")
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
         if self.relevant_messages > self.messages_collected:
-            raise ValueError(
-                "relevant_messages cannot exceed messages_collected"
-            )
-        object.__setattr__(
-            self,
-            "details",
-            _freeze_mapping(self.details, "details"),
-        )
+            raise ValueError("relevant_messages cannot exceed messages_collected")
+        object.__setattr__(self, "details", _freeze_mapping(self.details, "details"))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -485,39 +439,42 @@ class DiscoveryPlan:
 
     def __post_init__(self) -> None:
         if not isinstance(self.scope, GeoScope):
-            raise ValueError("scope must be GeoScope")
-        object.__setattr__(
-            self,
-            "provider",
-            _required_text(self.provider, "provider"),
-        )
+            raise TypeError("scope must be GeoScope")
+        object.__setattr__(self, "provider", _required_text(self.provider, "provider"))
         object.__setattr__(self, "queries", tuple(self.queries))
         object.__setattr__(self, "candidates", tuple(self.candidates))
         object.__setattr__(self, "outcomes", tuple(self.outcomes))
-        ids = [item.candidate_id for item in self.candidates]
-        if len(ids) != len(set(ids)):
-            raise ValueError("candidate ids must be unique")
+        if not all(isinstance(item, DiscoveryQuery) for item in self.queries):
+            raise TypeError("queries must contain DiscoveryQuery")
+        if not all(isinstance(item, SourceCandidate) for item in self.candidates):
+            raise TypeError("candidates must contain SourceCandidate")
+        if not all(isinstance(item, SourceOutcome) for item in self.outcomes):
+            raise TypeError("outcomes must contain SourceOutcome")
 
     @property
     def active_candidates(self) -> tuple[SourceCandidate, ...]:
         return tuple(item for item in self.candidates if item.active)
 
     def to_dict(self) -> dict[str, Any]:
-        active_count = len(self.active_candidates)
-        candidate_count = len(self.candidates)
         return {
-            "scope": self.scope.to_dict(),
+            "territory": self.scope.to_dict(),
             "provider": self.provider,
-            "active_source_kinds": sorted(
-                item.value for item in ACTIVE_SOURCE_KINDS
-            ),
             "queries": [item.to_dict() for item in self.queries],
             "candidates": [item.to_dict() for item in self.candidates],
             "outcomes": [item.to_dict() for item in self.outcomes],
-            "stats": {
-                "queries": len(self.queries),
-                "candidates": candidate_count,
-                "active_candidates": active_count,
-                "excluded_candidates": candidate_count - active_count,
-            },
         }
+
+
+__all__ = [
+    "ACTIVE_SOURCE_KINDS",
+    "DiscoveryPlan",
+    "DiscoveryQuery",
+    "GeoScope",
+    "SearchHit",
+    "SourceCandidate",
+    "SourceKind",
+    "SourceOutcome",
+    "SourceReasonCode",
+    "SourceState",
+    "canonical_url",
+]
