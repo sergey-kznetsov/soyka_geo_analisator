@@ -205,7 +205,12 @@ def test_classifier_marks_known_platforms_and_local_forums() -> None:
         SearchHit("q", "Отзывы", "https://2gis.ru/izhevsk/firm/1", provider="test")
     ) is SourceKind.TWO_GIS
     assert classifier.classify(
-        SearchHit("q", "Форум жителей Ижевска", "https://forum.example.ru/", provider="test")
+        SearchHit(
+            "q",
+            "Форум жителей Ижевска",
+            "https://forum.example.ru/",
+            provider="test",
+        )
     ) is SourceKind.LOCAL_FORUM
     assert classifier.classify(
         SearchHit("q", "Видео", "https://rutube.ru/video/1/", provider="test")
@@ -248,12 +253,12 @@ class FakeYandexTransport:
 
     def post_json(self, url, *, headers, payload, timeout_seconds):
         self.calls.append((url, headers, payload, timeout_seconds))
-        xml = b"""<?xml version='1.0' encoding='utf-8'?>
+        xml = """<?xml version='1.0' encoding='utf-8'?>
         <yandexsearch><response><results><grouping><group><doc>
         <url>https://example.ru/news/277</url>
         <title>Новости Ижевска</title>
         <passages><passage>Пушкинская 277, Ижевск</passage></passages>
-        </doc></group></grouping></results></response></yandexsearch>"""
+        </doc></group></grouping></results></response></yandexsearch>""".encode("utf-8")
         return 200, {"rawData": base64.b64encode(xml).decode("ascii")}
 
 
