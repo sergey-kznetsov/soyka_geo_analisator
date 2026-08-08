@@ -94,7 +94,23 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["soika-uds", "serve-probes", "--host", "0.0.0.0", "--port", "8080", "--repository-root", "/app"]
 
-FROM runtime-base AS cpu
+FROM runtime-base AS browser-runtime
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/soika/playwright
+USER root
+COPY requirements-browser.txt /tmp/requirements-browser.txt
+RUN python -m pip install \
+        --require-hashes \
+        --no-deps \
+        -r /tmp/requirements-browser.txt \
+    && mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
+    && python -m playwright install --with-deps chromium \
+    && python -c "from playwright.sync_api import sync_playwright; print('playwright-runtime-ok')" \
+    && rm -f /tmp/requirements-browser.txt \
+    && rm -rf /var/lib/apt/lists/* \
+    && chown -R soika:soika "${PLAYWRIGHT_BROWSERS_PATH}"
+USER soika
+
+FROM browser-runtime AS cpu
 ENV SOIKA_DEVICE=cpu \
     SOIKA_REQUIRE_CUDA=false
 
