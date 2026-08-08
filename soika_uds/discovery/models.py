@@ -204,9 +204,10 @@ class GeoScope:
         object.__setattr__(self, "latitude", latitude)
         object.__setattr__(self, "confidence", confidence)
 
-        if self.osm_id is not None:
-            if not isinstance(self.osm_id, int) or self.osm_id < 1:
-                raise ValueError("osm_id must be a positive integer")
+        if self.osm_id is not None and (
+            not isinstance(self.osm_id, int) or self.osm_id < 1
+        ):
+            raise ValueError("osm_id must be a positive integer")
         aliases = tuple(
             dict.fromkeys(
                 _required_text(item, "aliases[]") for item in self.aliases
