@@ -10,6 +10,7 @@ from typing import Any
 from .crs import metric_crs_for
 from .extraction import MentionExtractor
 from .models import (
+    ALGORITHM_VERSION,
     AddressMention,
     GeocodingCandidate,
     GeolocationBatchResult,
