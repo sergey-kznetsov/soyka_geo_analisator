@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import quote, urlsplit
+from urllib.parse import urlsplit
 
 from ..contracts import SourceMessage
 from .collection import CandidateCollectionError, CandidateCollectionResult
