@@ -4,21 +4,16 @@ from __future__ import annotations
 
 import json
 import ssl
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 from urllib.robotparser import RobotFileParser
 
-from ..parsers import (
-    AccessMethod,
-    ComplianceContext,
-    RobotsDecision,
-    SourcePolicy,
-)
+from ..parsers import AccessMethod, ComplianceContext, RobotsDecision, SourcePolicy
 from ..parsers.compliance import ComplianceGate
 from ..parsers.security import Resolver, UnsafeOutboundRequestError, validate_outbound_url
 from .collection import CandidateCollectionError
@@ -183,7 +178,7 @@ class SourceAccessAuthorizer:
             raise CandidateCollectionError(
                 SourceReasonCode.SOURCE_CONFIGURATION_MISSING,
                 (
-                    f"no reviewed public-web source policy is configured for "
+                    "no reviewed public-web source policy is configured for "
                     f"{candidate.domain}"
                 ),
                 state=SourceState.CONFIGURATION_MISSING,
@@ -201,10 +196,15 @@ class SourceAccessAuthorizer:
             return policy
 
         reasons = tuple(decision.reasons)
-        if "ROBOTS_DISALLOWED" in reasons:
-            code = SourceReasonCode.ROBOTS_DENIED
-            state = SourceState.BLOCKED
-        elif "ROBOTS_UNAVAILABLE" in reasons or "ROBOTS_NOT_CHECKED" in reasons:
+        robots_blocked = any(
+            item in reasons
+            for item in (
+                "ROBOTS_DISALLOWED",
+                "ROBOTS_UNAVAILABLE",
+                "ROBOTS_NOT_CHECKED",
+            )
+        )
+        if robots_blocked:
             code = SourceReasonCode.ROBOTS_DENIED
             state = SourceState.BLOCKED
         elif "CREDENTIAL_UNAVAILABLE" in reasons:
