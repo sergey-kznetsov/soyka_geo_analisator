@@ -29,9 +29,9 @@ Geo Analyzer 2 на этом этапе не изменяется. Его уни
 
 ## Результаты после Stage 17 remediation
 
-Подтверждённый повторный release-candidate прогон показал:
+Подтверждённый повторный release-candidate test surface показал:
 
-- 316 unit/contract/regression tests — passed;
+- 318 unit/contract/regression tests — passed;
 - 8 module HTTP protocol tests — passed;
 - 17 PostgreSQL/PostGIS, worker queue, load/soak и failure-injection tests — passed;
 - logical backup/restore PostgreSQL 18 + PostGIS — passed;
@@ -53,6 +53,8 @@ Backup/restore выполняется клиентскими утилитами 
 Исторические версии сохранены только в `requirements-legacy-research.txt` для изолированного воспроизведения старых экспериментов. Они не входят в production Poetry main group, Docker image, worker/module API runtime или release-candidate dependency gate. Подробности: `docs/LEGACY_RESEARCH_ENVIRONMENT.md` и `docs/STAGE_17_STATUS.md`.
 
 Внешний XML переведён на `defusedxml`, controlled external URL boundary ограничена HTTPS, а локальный probe server по умолчанию использует loopback. Оставшиеся Bandit B608 medium findings в worker queue относятся к статическим внутренним спискам колонок; фактические значения передаются через psycopg parameters `%s` и не интерполируются в структуру SQL.
+
+Повторная live geolocation qualification после обновления lock дополнительно выявила ranking defect для house candidates: `amenity/building` мог вытеснить структурированное `address.road` при сравнении названия улицы. Stage 17 исправляет house ranking так, чтобы точная structured road match имела приоритет без снижения qualification thresholds.
 
 ## Ограничение model qualification
 
