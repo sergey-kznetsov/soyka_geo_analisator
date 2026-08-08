@@ -1,0 +1,83 @@
+name: soika-worker-runtime
+
+x-worker-common: &worker-common
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  volumes:
+    - soika-worker-data:/var/lib/soika
+    - soika-worker-models:/var/cache/soika/models:ro
+  secrets:
+    - geoanalyzer_database_dsn
+  environment:
+    GEOANALYZER_DATABASE_DSN_FILE: /run/secrets/geoanalyzer_database_dsn
+    SOIKA_WORKER_EXECUTOR: ${SOIKA_WORKER_EXECUTOR:?SOIKA_WORKER_EXECUTOR is required}
+  expose:
+    - "9090"
+  networks:
+    - geoanalyzer_backend
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  pids_limit: 512
+  stop_grace_period: 2m
+
+services:
+  soika-worker-cpu:
+    <<: *worker-common
+    build:
+      context: .
+      target: cpu
+    image: soika-uds-development:cpu
+    mem_limit: ${SOIKA_CPU_MEMORY_LIMIT:-4g}
+    cpus: ${SOIKA_CPU_CPUS:-2.0}
+    command:
+      - soika-worker
+      - --compute-class
+      - cpu
+      - --probe-host
+      - 0.0.0.0
+      - --allow-remote-probes
+      - --require-memory-limit-mb
+      - ${SOIKA_CPU_MEMORY_MAX_MB:-4096}
+
+  soika-worker-gpu:
+    <<: *worker-common
+    build:
+      context: .
+      target: gpu
+    image: soika-uds-development:gpu
+    mem_limit: ${SOIKA_GPU_MEMORY_LIMIT:-12g}
+    cpus: ${SOIKA_GPU_CPUS:-4.0}
+    command:
+      - soika-worker
+      - --compute-class
+      - gpu
+      - --probe-host
+      - 0.0.0.0
+      - --allow-remote-probes
+      - --require-memory-limit-mb
+      - ${SOIKA_GPU_MEMORY_MAX_MB:-12288}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  geoanalyzer_backend:
+    external: true
+    name: ${GEOANALYZER_BACKEND_NETWORK:-geoanalyzer-backend}
+
+secrets:
+  geoanalyzer_database_dsn:
+    file: ${GEOANALYZER_DATABASE_DSN_FILE:?GEOANALYZER_DATABASE_DSN_FILE is required}
+
+volumes:
+  soika-worker-data:
+  soika-worker-models:
