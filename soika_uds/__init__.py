@@ -37,8 +37,10 @@ from .events import (
     EventClusteringConfig,
     EventClusteringEngine,
     EventClusteringStageHandler,
+    EventConnection,
     EventLevel,
     EventMessage,
+    EventRiskScore,
     HashingEmbeddingBackend,
     HDBSCANClusteringBackend,
     IdentityReductionBackend,
@@ -187,7 +189,7 @@ from .spatial_filtering import (
     spatial_query_plan,
 )
 
-__version__ = "0.19.0"
+__version__ = "0.20.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
