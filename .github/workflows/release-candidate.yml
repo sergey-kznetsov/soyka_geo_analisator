@@ -36,6 +36,7 @@ jobs:
           shapely==2.0.1
           pymorphy3==2.0.6
           pymorphy3-dicts-ru==2.4.417150.4580142
+          defusedxml==0.7.1
       - name: Compile release candidate sources
         run: python -m compileall -q factfinder pymorphy2 soika_uds geoanalyzer_storage scripts
       - name: Lint release candidate test surface
