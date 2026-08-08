@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
@@ -12,7 +11,12 @@ from typing import Any
 from ..contracts import SourceMessage
 from ..parsers import SourcePolicy
 from .access import SourceAccessAuthorizer
-from .browser import BrowserRenderError, BrowserRenderer, RenderedComment, RenderedPage
+from .browser import (
+    BrowserRenderError,
+    BrowserRenderer,
+    RenderedComment,
+    RenderedPage,
+)
 from .collection import CandidateCollectionError, CandidateCollectionResult
 from .http import StaticHtmlFetcher
 from .models import (
@@ -23,8 +27,6 @@ from .models import (
     SourceReasonCode,
     SourceState,
 )
-
-_WORD_RE = re.compile(r"[\w-]+", re.UNICODE)
 
 
 def _normalize(value: str) -> str:
@@ -74,7 +76,11 @@ def _message_metadata(
         "browser_used": browser_used,
         "geo_relevance_hint": relevance,
     }
-    return {key: value for key, value in values.items() if _metadata_allowed(policy, key)}
+    return {
+        key: value
+        for key, value in values.items()
+        if _metadata_allowed(policy, key)
+    }
 
 
 def geo_relevance_hint(text: str, scope: GeoScope) -> str:
@@ -152,7 +158,12 @@ def _comment_message(
     if published is None:
         return None
     url = page.canonical_url or page.final_url
-    raw_id = comment.external_id or _external_id("comment", url, str(index), comment.text)
+    raw_id = comment.external_id or _external_id(
+        "comment",
+        url,
+        str(index),
+        comment.text,
+    )
     relevance = geo_relevance_hint(comment.text, scope)
     return SourceMessage(
         source=policy.source_id,
@@ -181,9 +192,20 @@ class PublicWebCollector:
     minimum_static_chars: int = 240
 
     def __post_init__(self) -> None:
-        if self.source_kind in {SourceKind.TELEGRAM, SourceKind.VK, SourceKind.OK, SourceKind.MAX}:
-            raise ValueError("messenger/social API sources require dedicated collectors")
-        if not isinstance(self.minimum_static_chars, int) or self.minimum_static_chars < 80:
+        dedicated_kinds = {
+            SourceKind.TELEGRAM,
+            SourceKind.VK,
+            SourceKind.OK,
+            SourceKind.MAX,
+        }
+        if self.source_kind in dedicated_kinds:
+            raise ValueError(
+                "messenger/social API sources require dedicated collectors"
+            )
+        if (
+            not isinstance(self.minimum_static_chars, int)
+            or self.minimum_static_chars < 80
+        ):
             raise ValueError("minimum_static_chars must be at least 80")
 
     def _render(
@@ -196,7 +218,7 @@ class PublicWebCollector:
             try:
                 page = self.static_fetcher.fetch(candidate.url, policy.security)
             except BrowserRenderError as error:
-                if error.code not in {SourceReasonCode.PARSER_FAILED}:
+                if error.code is not SourceReasonCode.PARSER_FAILED:
                     raise
             else:
                 if len(page.body_text) >= self.minimum_static_chars:
@@ -255,7 +277,10 @@ class PublicWebCollector:
                 str(item.metadata.get("geo_relevance_hint", "unresolved"))
                 for item in messages
             ]
-            relevant = sum(hint in {"house", "street", "district"} for hint in hints)
+            relevant = sum(
+                hint in {"house", "street", "district"}
+                for hint in hints
+            )
             state = SourceState.COLLECTED
             reason = "source collected successfully"
             reason_code = SourceReasonCode.NONE
@@ -263,16 +288,20 @@ class PublicWebCollector:
             relevant = 0
             state = SourceState.PARTIAL
             reason = (
-                "public text was accessible but no record had a usable timezone-aware "
-                "publication timestamp"
+                "public text was accessible but no record had a usable "
+                "timezone-aware publication timestamp"
             )
             reason_code = SourceReasonCode.NO_RELEVANT_CONTENT
         else:
             relevant = 0
             state = SourceState.NO_RELEVANT_RESULTS
-            reason = "source was checked successfully but contained no collectable public text"
+            reason = (
+                "source was checked successfully but contained no collectable "
+                "public text"
+            )
             reason_code = SourceReasonCode.NO_RESULTS
 
+        comments_emitted = len(messages) - (1 if article is not None else 0)
         return CandidateCollectionResult(
             messages=tuple(messages),
             outcome=SourceOutcome(
@@ -289,7 +318,7 @@ class PublicWebCollector:
                     "browser_used": browser_used,
                     "blocked_subrequests": page.blocked_subrequests,
                     "comments_seen": len(page.comments),
-                    "comments_emitted": max(0, len(messages) - (1 if article else 0)),
+                    "comments_emitted": max(0, comments_emitted),
                     "final_geo_filter_required": True,
                 },
             ),
