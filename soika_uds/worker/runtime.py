@@ -188,6 +188,30 @@ class WorkerRuntime:
                         )
                     )
                     return
+                except Exception as error:  # noqa: BLE001 - lease state is now uncertain
+                    lease_lost.set()
+                    cancellation.set()
+                    self.metrics.inc("lease_heartbeat_errors_total")
+                    self.alert_sink.emit(
+                        WorkerAlert(
+                            code="QUEUE_HEARTBEAT_ERROR",
+                            message="worker could not prove continued ownership of queue lease",
+                            severity="error",
+                            analysis_id=item.analysis_id,
+                            trace_id=item.trace_id,
+                        )
+                    )
+                    log_event(
+                        self.logger,
+                        logging.ERROR,
+                        "worker.lease.heartbeat_error",
+                        "queue lease heartbeat failed; execution is treated as lease-unsafe",
+                        analysis_id=item.analysis_id,
+                        worker_id=self.settings.worker_id,
+                        trace_id=item.trace_id,
+                        error_type=type(error).__name__,
+                    )
+                    return
                 if renewed.cancel_requested:
                     cancellation.set()
 
