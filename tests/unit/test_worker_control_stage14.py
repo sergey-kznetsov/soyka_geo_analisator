@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import soika_uds.worker.cli as worker_cli
 from soika_uds.contracts import JobStatus, TerritoryContext
 from soika_uds.integration import AnalysisRequestV1
 from soika_uds.orchestration import (
@@ -14,13 +15,6 @@ from soika_uds.orchestration import (
     SoikaOrchestrator,
 )
 from soika_uds.worker import ComputeClass, OrchestratorExecutor, WorkerControl
-from soika_uds.worker.cli import (
-    build_parser,
-    _postgres_application_name,
-    _read_secret_file,
-    _settings as _cli_settings,
-    _validate_memory_limit,
-)
 from soika_uds.worker.models import WorkerConfigurationError
 
 
@@ -230,10 +224,10 @@ def test_orchestrator_executor_renews_only_owned_lease() -> None:
 
 
 def test_worker_cli_does_not_expose_unenforced_shutdown_grace() -> None:
-    args = build_parser().parse_args([])
+    args = worker_cli.build_parser().parse_args([])
 
     assert not hasattr(args, "shutdown_grace_seconds")
-    settings = _cli_settings(args)
+    settings = worker_cli._settings(args)
     assert settings.wall_timeout_seconds == 3600.0
 
 
@@ -244,13 +238,13 @@ def test_database_dsn_is_read_from_secret_file_not_argv(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    assert _read_secret_file(secret).endswith("@database/geoanalyzer")
-    assert _postgres_application_name("w" * 100) == "w" * 63
+    assert worker_cli._read_secret_file(secret).endswith("@database/geoanalyzer")
+    assert worker_cli._postgres_application_name("w" * 100) == "w" * 63
 
     empty = tmp_path / "empty"
     empty.write_text("\n", encoding="utf-8")
     with pytest.raises(WorkerConfigurationError):
-        _read_secret_file(empty)
+        worker_cli._read_secret_file(empty)
 
 
 def test_memory_limit_fails_closed_when_cgroup_is_unbounded(
@@ -262,4 +256,4 @@ def test_memory_limit_fails_closed_when_cgroup_is_unbounded(
     )
 
     with pytest.raises(WorkerConfigurationError, match="finite"):
-        _validate_memory_limit(4096)
+        worker_cli._validate_memory_limit(4096)
