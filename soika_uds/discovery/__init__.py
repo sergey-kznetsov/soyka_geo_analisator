@@ -26,9 +26,9 @@ from .models import (
 from .orchestration import GeoDiscoveryPreparingHandler
 from .providers import (
     JsonPostTransport,
-    RequestsJsonPostTransport,
     SearchProvider,
     SearchProviderError,
+    StdlibJsonPostTransport,
     UnavailableSearchProvider,
     YandexSearchProvider,
     parse_yandex_xml,
@@ -54,7 +54,6 @@ __all__ = [
     "GeoQueryBuilder",
     "GeoScope",
     "JsonPostTransport",
-    "RequestsJsonPostTransport",
     "SearchHit",
     "SearchProvider",
     "SearchProviderError",
@@ -64,6 +63,7 @@ __all__ = [
     "SourceOutcome",
     "SourceReasonCode",
     "SourceState",
+    "StdlibJsonPostTransport",
     "TerritoryGeolocationEngine",
     "TerritoryResolutionError",
     "TerritoryResolver",
