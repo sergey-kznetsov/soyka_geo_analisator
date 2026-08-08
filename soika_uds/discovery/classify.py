@@ -12,7 +12,10 @@ _MEDIA_RE = re.compile(
     re.I,
 )
 _MUNICIPAL_RE = re.compile(
-    r"\b(администрац|мэри|правительств|муниципал|городск(?:ая|ой) дума|официальн(?:ый|ая) портал)\w*",
+    (
+        r"\b(администрац|мэри|правительств|муниципал|городск(?:ая|ой) дума|"
+        r"официальн(?:ый|ая) портал)\w*"
+    ),
     re.I,
 )
 _FORUM_RE = re.compile(r"\b(форум|сообщество жителей|городское сообщество)\w*", re.I)
@@ -46,7 +49,12 @@ class SourceClassifier:
         if host in {"max.ru", "maxapp.ru"} or host.endswith((".max.ru", ".maxapp.ru")):
             return SourceKind.MAX
 
-        if host.endswith(".gov.ru") or host.endswith(".gosuslugi.ru") or _MUNICIPAL_RE.search(text):
+        municipal = (
+            host.endswith(".gov.ru")
+            or host.endswith(".gosuslugi.ru")
+            or _MUNICIPAL_RE.search(text)
+        )
+        if municipal:
             return SourceKind.MUNICIPAL
         if host.startswith("forum.") or "/forum" in path or _FORUM_RE.search(text):
             return SourceKind.LOCAL_FORUM
