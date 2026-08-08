@@ -258,7 +258,7 @@ class FakeYandexTransport:
         <url>https://example.ru/news/277</url>
         <title>Новости Ижевска</title>
         <passages><passage>Пушкинская 277, Ижевск</passage></passages>
-        </doc></group></grouping></results></response></yandexsearch>""".encode("utf-8")
+        </doc></group></grouping></results></response></yandexsearch>""".encode()
         return 200, {"rawData": base64.b64encode(xml).decode("ascii")}
 
 
