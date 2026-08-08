@@ -202,7 +202,9 @@ _EXTRACT_SCRIPT = r"""
     return '';
   };
   const titleElement = first(['h1', '[role="heading"][aria-level="1"]']);
-  const title = text(titleElement) || meta('meta[property="og:title"]') || clean(document.title);
+  const title = text(titleElement)
+    || meta('meta[property="og:title"]')
+    || clean(document.title);
   const bodyCandidates = Array.from(document.querySelectorAll(
     'article, main, [role="main"], .article, .post, .entry-content, .content, .news-item'
   ));
@@ -329,10 +331,8 @@ class PlaywrightBrowserRenderer:
             page.route("**/*", route_request)
             response = page.goto(target, wait_until="domcontentloaded")
             page.locator("body").wait_for(state="attached")
-            try:
+            with suppress(Exception):  # noqa: BLE001 - optional settle only
                 page.wait_for_load_state("load", timeout=min(timeout_ms, 5000))
-            except Exception:  # noqa: BLE001 - optional settle, extraction can continue
-                pass
             extracted = page.evaluate(_EXTRACT_SCRIPT)
             final_url = self._validate(page.url, security)
             title = str(extracted.get("title", ""))
