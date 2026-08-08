@@ -1,0 +1,42 @@
+name: stage17-probe-default
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 1
+      - name: Default local probe server to loopback
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("soika_uds/cli.py")
+          text = path.read_text(encoding="utf-8")
+          old = 'probes.add_argument("--host", default="0.0.0.0")'
+          new = 'probes.add_argument("--host", default="127.0.0.1")'
+          if text.count(old) != 1:
+              raise SystemExit("expected exactly one probe host default")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+      - name: Commit fix and remove one-shot workflow
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/stage17-probe-default.yml
+          git add soika_uds/cli.py
+          git commit -m "Default probe server to loopback"
+          git push origin "HEAD:${HEAD_BRANCH}"
