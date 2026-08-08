@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .classify import SourceClassifier, geo_evidence
 from .models import (
@@ -15,6 +15,7 @@ from .models import (
     SourceReasonCode,
     SourceState,
 )
+from .places import PlaceEnricher
 from .providers import SearchProvider, SearchProviderError
 from .query import GeoQueryBuilder
 
@@ -30,11 +31,20 @@ def _provider_state(error: SearchProviderError) -> SourceState:
     return SourceState.UNAVAILABLE
 
 
+def _enrich_scope(scope: GeoScope, enricher: PlaceEnricher) -> tuple[GeoScope, tuple[SourceOutcome, ...]]:
+    result = enricher.enrich(scope)
+    metadata = dict(scope.metadata)
+    metadata["places"] = [item.to_dict() for item in result.places]
+    metadata["place_names"] = list(dict.fromkeys(item.name for item in result.places))
+    return replace(scope, metadata=metadata), result.outcomes
+
+
 @dataclass(frozen=True, slots=True)
 class DiscoveryEngine:
     provider: SearchProvider
     query_builder: GeoQueryBuilder = GeoQueryBuilder()
     classifier: SourceClassifier = SourceClassifier()
+    place_enricher: PlaceEnricher | None = None
     results_per_query: int = 10
     max_candidates: int = 250
 
@@ -49,9 +59,13 @@ class DiscoveryEngine:
             raise ValueError("max_candidates must be in [10, 2000]")
 
     def plan(self, scope: GeoScope) -> DiscoveryPlan:
+        outcomes: list[SourceOutcome] = []
+        if self.place_enricher is not None:
+            scope, enrichment_outcomes = _enrich_scope(scope, self.place_enricher)
+            outcomes.extend(enrichment_outcomes)
+
         queries = self.query_builder.build(scope)
         candidates_by_url: dict[str, SourceCandidate] = {}
-        outcomes: list[SourceOutcome] = []
         provider_failed = False
 
         for query in queries:
@@ -73,7 +87,6 @@ class DiscoveryEngine:
                         },
                     )
                 )
-                # Credential/configuration failures affect every subsequent query.
                 if not error.retryable or error.code in {
                     SourceReasonCode.API_CREDENTIALS_MISSING,
                     SourceReasonCode.SOURCE_CONFIGURATION_MISSING,
