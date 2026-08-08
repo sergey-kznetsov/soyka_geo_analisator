@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from soika_uds.contracts import TerritoryContext
+from soika_uds.contracts import JobStatus, TerritoryContext
 from soika_uds.integration import AnalysisRequestV1
 from soika_uds.orchestration import (
     InMemoryJobStore,
@@ -17,7 +17,9 @@ from soika_uds.worker import ComputeClass, OrchestratorExecutor, WorkerControl
 from soika_uds.worker.cli import (
     _postgres_application_name,
     _read_secret_file,
+    _settings as _cli_settings,
     _validate_memory_limit,
+    build_parser,
 )
 from soika_uds.worker.models import WorkerConfigurationError
 
@@ -103,12 +105,41 @@ def test_backend_control_submit_is_idempotent_and_routes_compute_class() -> None
     )
 
     assert first_record.analysis_id == second_record.analysis_id
+    assert first_item is not None
+    assert second_item is not None
     assert first_item.compute_class is ComputeClass.GPU
     assert second_item.compute_class is ComputeClass.GPU
     assert queue.enqueued == [
         (request.analysis_id, ComputeClass.GPU),
         (request.analysis_id, ComputeClass.GPU),
     ]
+
+
+def test_terminal_idempotent_submit_does_not_reenqueue() -> None:
+    store = InMemoryJobStore()
+    orchestrator = SoikaOrchestrator(store, {})
+    queue = ControlQueue()
+    control = WorkerControl(orchestrator, queue)
+    request = _request("stage14-terminal-submit")
+
+    record, item = control.submit(request, compute_class=ComputeClass.CPU)
+    assert item is not None
+    terminal = replace(
+        record,
+        status=JobStatus.COMPLETED,
+        progress_percent=100,
+        updated_at=datetime.now(UTC),
+    )
+    store.save(terminal, expected_revision=record.revision)
+
+    repeated, repeated_item = control.submit(
+        request,
+        compute_class=ComputeClass.CPU,
+    )
+
+    assert repeated.status is JobStatus.COMPLETED
+    assert repeated_item is None
+    assert queue.enqueued == [(request.analysis_id, ComputeClass.CPU)]
 
 
 def test_submit_recovers_after_temporary_queue_failure() -> None:
@@ -124,6 +155,7 @@ def test_submit_recovers_after_temporary_queue_failure() -> None:
     persisted = store.load(request.analysis_id)
     record, item = control.submit(request, compute_class=ComputeClass.CPU)
 
+    assert item is not None
     assert record.analysis_id == persisted.analysis_id
     assert item.analysis_id == persisted.analysis_id
     assert queue.enqueued == [(request.analysis_id, ComputeClass.CPU)]
@@ -195,6 +227,14 @@ def test_orchestrator_executor_renews_only_owned_lease() -> None:
     assert renewed.lease_owner == "stage14-owner"
     assert renewed.lease_expires_at is not None
     assert renewed.lease_expires_at > leased.lease_expires_at
+
+
+def test_worker_cli_does_not_expose_unenforced_shutdown_grace() -> None:
+    args = build_parser().parse_args([])
+
+    assert not hasattr(args, "shutdown_grace_seconds")
+    settings = _cli_settings(args)
+    assert settings.wall_timeout_seconds == 3600.0
 
 
 def test_database_dsn_is_read_from_secret_file_not_argv(tmp_path: Path) -> None:
