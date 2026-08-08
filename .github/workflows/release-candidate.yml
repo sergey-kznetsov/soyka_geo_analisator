@@ -187,5 +187,5 @@ jobs:
           cat /tmp/bandit-report.json
       - name: Block release candidate on high-severity static findings
         run: bandit -r soika_uds geoanalyzer_storage -lll -q
-      - name: Locked dependency vulnerability scan
-        run: pip-audit --locked . --progress-spinner off
+      - name: Project dependency vulnerability scan
+        run: pip-audit . --progress-spinner off
