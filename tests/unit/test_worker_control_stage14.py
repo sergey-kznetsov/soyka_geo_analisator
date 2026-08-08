@@ -58,6 +58,18 @@ class ControlQueue:
         return self.enqueue(analysis_id, compute_class=ComputeClass.CPU)
 
 
+class FlakySubmitQueue(ControlQueue):
+    def __init__(self) -> None:
+        super().__init__()
+        self.failures_remaining = 1
+
+    def enqueue(self, *args, **kwargs):
+        if self.failures_remaining:
+            self.failures_remaining -= 1
+            raise RuntimeError("temporary queue outage")
+        return super().enqueue(*args, **kwargs)
+
+
 def _request(analysis_id: str) -> AnalysisRequestV1:
     return AnalysisRequestV1(
         analysis_id=analysis_id,
@@ -93,6 +105,24 @@ def test_backend_control_submit_is_idempotent_and_routes_compute_class() -> None
         (request.analysis_id, ComputeClass.GPU),
         (request.analysis_id, ComputeClass.GPU),
     ]
+
+
+def test_submit_recovers_after_temporary_queue_failure() -> None:
+    store = InMemoryJobStore()
+    orchestrator = SoikaOrchestrator(store, {})
+    queue = FlakySubmitQueue()
+    control = WorkerControl(orchestrator, queue)
+    request = _request("stage14-submit-recovery")
+
+    with pytest.raises(RuntimeError, match="temporary queue outage"):
+        control.submit(request, compute_class=ComputeClass.CPU)
+
+    persisted = store.load(request.analysis_id)
+    record, item = control.submit(request, compute_class=ComputeClass.CPU)
+
+    assert record.analysis_id == persisted.analysis_id
+    assert item.analysis_id == persisted.analysis_id
+    assert queue.enqueued == [(request.analysis_id, ComputeClass.CPU)]
 
 
 def test_orchestrator_executor_renews_only_owned_lease() -> None:
