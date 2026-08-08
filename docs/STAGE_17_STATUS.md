@@ -28,15 +28,25 @@ Production dependency set обновлён, в том числе:
 
 Controlled external probes теперь принимают только HTTPS URL с hostname, запрещают credentials в URL и отклоняют redirect, покидающий HTTPS transport. Для внешнего XML используется `defusedxml` вместо небезопасного `xml.etree.ElementTree.fromstring`.
 
-Локальный `serve-probes` по умолчанию переводится на loopback `127.0.0.1`; Docker image продолжает явно передавать `--host 0.0.0.0`, поскольку его probe endpoint публикуется только в управляемой container boundary.
+Локальный `serve-probes` по умолчанию использует loopback `127.0.0.1`; Docker image продолжает явно передавать `--host 0.0.0.0`, поскольку его probe endpoint публикуется только в управляемой container boundary.
 
-Оставшиеся Bandit B608 medium findings в worker queue относятся к статическим внутренним спискам колонок SQL. Все значения задания, worker ID, lease, статусы и ошибки продолжают передаваться psycopg как параметры `%s`; пользовательские данные в SQL identifiers/structure не интерполируются. Эти finding не подавляются allowlist-ом и сохраняются как reviewed static-analysis evidence.
+Оставшиеся Bandit B608 medium findings в worker queue относятся к статическим внутренним спискам колонок SQL. Все значения задания, worker ID, lease, статусы и ошибки продолжают передаваться psycopg как параметры `%s`; пользовательские данные в SQL identifiers/structure не интерполируются. Эти findings не подавляются allowlist-ом и сохраняются как reviewed static-analysis evidence.
+
+## Geolocation drift, выявленный повторной квалификацией
+
+После обновления безопасного dependency lock live qualification на публичном Nominatim выявила реальный ranking regression: для `ул. Тверская, д. 13` в Москве более высокий score получал дом `13` на `4-й Тверской-Ямской`, хотя в том же candidate set присутствовал точный объект на `Тверской улице, 13`.
+
+Причина была в house-ranking: `_semantic_name()` отдавал имя `amenity/building` раньше structured `address.road`. Для точного объекта `Правительство Москвы, 13, Тверская улица` street similarity поэтому вычислялась против названия amenity, а у ложного кандидата — против похожего названия улицы.
+
+Stage 17 исправляет house-ranking без ослабления distance threshold: для house mention street similarity теперь в первую очередь вычисляется по структурированному `address.road`. Добавлена regression-проверка, в которой точный `Тверская улица, 13` обязан обгонять `4-я Тверская-Ямская улица, 13`, даже если точный candidate ниже в исходном Nominatim rank.
+
+Geolocation qualification workflow также приведён в соответствие с новым безопасным lock: прежняя CI-проверка жёстко ожидала уязвимый `requests==2.31.0`, теперь она проверяет зафиксированный `requests==2.34.2`.
 
 ## Release-candidate regression
 
-После remediation уже подтвержден отдельный полный release-candidate прогон:
+После remediation подтверждён release-candidate test surface:
 
-- 316 unit/contract/regression tests — passed;
+- 318 unit/contract/regression tests — passed;
 - module protocol end-to-end — passed;
 - controlled-external evidence — passed;
 - PostgreSQL/PostGIS, queue load/soak, failure injection и backup/restore — passed;
@@ -44,7 +54,7 @@ Controlled external probes теперь принимают только HTTPS UR
 - storage dependency audit — passed;
 - Bandit HIGH severity — 0.
 
-Geolocation qualification workflow был дополнительно приведён в соответствие с новым безопасным lock: прежняя CI-проверка жёстко ожидала уязвимый `requests==2.31.0`, теперь она проверяет зафиксированный `requests==2.34.2`.
+Финальная live geolocation qualification должна проходить на том же head commit; её результат является обязательным перед интеграцией Stage 17 в Stage 16.
 
 ## Model qualification
 
