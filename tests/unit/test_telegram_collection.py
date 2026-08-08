@@ -123,10 +123,12 @@ def test_telegram_collector_emits_posts_comments_and_explicit_coverage() -> None
     assert result.messages[0].author_id is None
     assert result.messages[0].metadata["kind"] == "telegram_post"
     assert result.messages[1].metadata["kind"] == "telegram_comment"
+    assert result.messages[1].url == "https://t.me/izhevsk_news/123?comment=9001"
     assert result.outcome.state is SourceState.COLLECTED
     assert result.outcome.reason_code is SourceReasonCode.NONE
     assert result.outcome.messages_collected == 2
-    assert result.outcome.relevant_messages == 2
+    # Only the exact normalized street/house match is counted as a pre-filter hint.
+    assert result.outcome.relevant_messages == 1
     assert result.outcome.details["final_geo_filter_required"] is True
     call = gateway.calls[0]
     assert call[0].username == "izhevsk_news"
