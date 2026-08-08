@@ -257,6 +257,47 @@ def test_http_submit_is_accepted_without_executing_untrusted_code() -> None:
     assert queue.enqueued == [("stage15-http", ComputeClass.CPU)]
 
 
+def test_invalid_contract_values_return_422_not_500() -> None:
+    api, _orchestrator, queue = _api()
+    port = _free_port()
+    token = "stage15-secret-token"
+    payload = _request("stage15-invalid")
+    territory = payload["territory"]
+    assert isinstance(territory, dict)
+    point = territory["point"]
+    assert isinstance(point, dict)
+    point["latitude"] = 91.0
+
+    with ModuleHttpServer(api, auth_token=token, port=port):
+        status, problem = _http_json(
+            f"http://127.0.0.1:{port}/v1/analyses",
+            token=token,
+            method="POST",
+            payload=payload,
+        )
+
+    assert status == 422
+    assert problem["status"] == 422
+    assert problem["title"] == "Invalid Module Request"
+    assert queue.enqueued == []
+
+
+def test_unknown_result_returns_404_not_result_not_ready() -> None:
+    api, _orchestrator, _queue = _api()
+    port = _free_port()
+    token = "stage15-secret-token"
+
+    with ModuleHttpServer(api, auth_token=token, port=port):
+        status, problem = _http_json(
+            f"http://127.0.0.1:{port}/v1/analyses/missing-analysis/result",
+            token=token,
+        )
+
+    assert status == 404
+    assert problem["status"] == 404
+    assert problem["title"] == "Analysis Not Found"
+
+
 def test_remote_bind_is_explicit() -> None:
     api, _orchestrator, _queue = _api()
 
