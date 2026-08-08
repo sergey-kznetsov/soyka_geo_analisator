@@ -27,6 +27,7 @@ from .collection import (
     DiscoveryCollectionStageHandler,
     source_message_document,
 )
+from .configuration import build_yandex_search_provider_from_env, read_secret_value
 from .engine import DiscoveryEngine
 from .http import StaticHtmlFetcher
 from .map_reviews import MapReviewUnavailableCollector
@@ -150,12 +151,14 @@ __all__ = [
     "YandexSearchProvider",
     "build_place_enricher_from_env",
     "build_telegram_collector_from_env",
+    "build_yandex_search_provider_from_env",
     "canonical_url",
     "classify_browser_block",
     "geo_evidence",
     "geo_relevance_hint",
     "parse_telegram_target",
     "parse_yandex_xml",
+    "read_secret_value",
     "source_message_document",
     "telegram_search_terms",
 ]
