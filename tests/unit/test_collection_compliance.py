@@ -24,6 +24,8 @@ SCOPE = GeoScope(
     latitude=56.8665403,
     precision="house",
     confidence=1.0,
+    candidate_id="compliance-house-277",
+    label="Ижевск, Пушкинская улица, 277",
 )
 
 
