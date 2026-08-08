@@ -58,7 +58,7 @@ class WorkerControl:
         return record
 
     def retry(self, analysis_id: str) -> JobRecord:
-        current = self.orchestrator.status(analysis_id)
+        current = self.orchestrator.store.load(analysis_id)
         if current.status is JobStatus.FAILED:
             self.queue.retry(analysis_id)
             try:
