@@ -130,8 +130,7 @@ def test_static_page_emits_real_source_message_without_browser() -> None:
         status_code=200,
         title="Ремонт на Пушкинской",
         body_text=(
-            "Ижевск. На Пушкинской улице у дома 277 начался ремонт тротуара. "
-            * 8
+            "Ижевск. Пушкинская улица 277: начался ремонт тротуара. " * 8
         ),
         canonical_url=CANDIDATE.url,
         published_at="2026-08-08T10:00:00+04:00",
