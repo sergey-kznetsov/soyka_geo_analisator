@@ -12,6 +12,7 @@ from html.parser import HTMLParser
 from types import MappingProxyType
 from typing import Any, Protocol
 from urllib.parse import urlencode, urljoin, urlsplit
+from defusedxml.ElementTree import fromstring as safe_xml_fromstring
 from xml.etree import ElementTree
 
 from ...contracts import SourceMessage
@@ -1010,7 +1011,7 @@ class HtmlConnectorAdapter:
         body: bytes,
     ) -> tuple[tuple[SourceMessage, ...], tuple[str, ...]]:
         try:
-            root = ElementTree.fromstring(body)
+            root = safe_xml_fromstring(body)
         except ElementTree.ParseError as error:
             raise PermanentParserError(
                 "upstream XML is invalid",
