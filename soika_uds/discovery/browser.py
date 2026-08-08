@@ -8,16 +8,24 @@ unless the source policy explicitly allowlists them.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from ..parsers import SecurityPolicy
-from ..parsers.security import Resolver, UnsafeOutboundRequestError, validate_outbound_url
+from ..parsers.security import (
+    Resolver,
+    UnsafeOutboundRequestError,
+    validate_outbound_url,
+)
 from .models import SourceReasonCode, SourceState, canonical_url
 
-_AUTH_PATH_RE = re.compile(r"/(?:login|signin|sign-in|auth|authorize|sso)(?:/|$)", re.I)
+_AUTH_PATH_RE = re.compile(
+    r"/(?:login|signin|sign-in|auth|authorize|sso)(?:/|$)",
+    re.I,
+)
 _CAPTCHA_RE = re.compile(
     r"\b(captcha|капч[аи]|verify\s+(?:that\s+)?you\s+are\s+human|я\s+не\s+робот)\b",
     re.I,
@@ -76,10 +84,15 @@ class RenderedPage:
     blocked_subrequests: int = 0
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "requested_url", canonical_url(self.requested_url))
+        object.__setattr__(
+            self,
+            "requested_url",
+            canonical_url(self.requested_url),
+        )
         object.__setattr__(self, "final_url", canonical_url(self.final_url))
         if self.status_code is not None and (
-            not isinstance(self.status_code, int) or not 100 <= self.status_code <= 599
+            not isinstance(self.status_code, int)
+            or not 100 <= self.status_code <= 599
         ):
             raise ValueError("status_code must be an HTTP status")
         if not isinstance(self.title, str):
@@ -89,12 +102,19 @@ class RenderedPage:
         object.__setattr__(self, "title", self.title.strip())
         object.__setattr__(self, "body_text", self.body_text.strip())
         if self.canonical_url is not None:
-            object.__setattr__(self, "canonical_url", canonical_url(self.canonical_url))
+            object.__setattr__(
+                self,
+                "canonical_url",
+                canonical_url(self.canonical_url),
+            )
         if self.published_at is not None:
             value = self.published_at.strip()
             object.__setattr__(self, "published_at", value or None)
         object.__setattr__(self, "comments", tuple(self.comments))
-        if not isinstance(self.blocked_subrequests, int) or self.blocked_subrequests < 0:
+        if (
+            not isinstance(self.blocked_subrequests, int)
+            or self.blocked_subrequests < 0
+        ):
             raise ValueError("blocked_subrequests must be non-negative")
 
 
@@ -242,7 +262,10 @@ class PlaywrightBrowserRenderer:
     browser_factory: Callable[[], Any] | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.timeout_seconds, int | float) or self.timeout_seconds <= 0:
+        if (
+            not isinstance(self.timeout_seconds, int | float)
+            or self.timeout_seconds <= 0
+        ):
             raise ValueError("timeout_seconds must be positive")
 
     def _validate(self, url: str, security: SecurityPolicy) -> str:
@@ -275,12 +298,11 @@ class PlaywrightBrowserRenderer:
         target = self._validate(url, security)
         timeout_ms = int(float(self.timeout_seconds) * 1000)
         blocked: list[str] = []
-
         runtime = self._runtime()
-        try:
-            manager = runtime.__enter__()
-        except AttributeError:
-            manager = runtime
+        entered = hasattr(runtime, "__enter__")
+        manager = runtime.__enter__() if entered else runtime
+        browser = None
+        context = None
         try:
             browser = manager.chromium.launch(headless=True)
             context = browser.new_context(
@@ -307,11 +329,9 @@ class PlaywrightBrowserRenderer:
             page.route("**/*", route_request)
             response = page.goto(target, wait_until="domcontentloaded")
             page.locator("body").wait_for(state="attached")
-            ready_selector = security.user_agent and None
-            del ready_selector
             try:
                 page.wait_for_load_state("load", timeout=min(timeout_ms, 5000))
-            except Exception:  # page can legitimately keep loading ads/analytics
+            except Exception:  # noqa: BLE001 - optional settle, extraction can continue
                 pass
             extracted = page.evaluate(_EXTRACT_SCRIPT)
             final_url = self._validate(page.url, security)
@@ -326,7 +346,7 @@ class PlaywrightBrowserRenderer:
             )
             if block is not None:
                 raise block
-            if len(body_text.encode("utf-8")) > security.max_response_bytes:
+            if len(body_text.encode()) > security.max_response_bytes:
                 raise BrowserRenderError(
                     SourceReasonCode.PARSER_FAILED,
                     "rendered page exceeded configured text-size limit",
@@ -343,7 +363,13 @@ class PlaywrightBrowserRenderer:
             )
             canonical_value = extracted.get("canonical") or None
             if canonical_value is not None:
-                canonical_value = self._validate(str(canonical_value), security)
+                try:
+                    canonical_value = self._validate(
+                        str(canonical_value),
+                        security,
+                    )
+                except BrowserRenderError:
+                    canonical_value = None
             return RenderedPage(
                 requested_url=target,
                 final_url=final_url,
@@ -357,7 +383,7 @@ class PlaywrightBrowserRenderer:
             )
         except BrowserRenderError:
             raise
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - browser process isolation boundary
             error_name = type(error).__name__
             if error_name == "TimeoutError" or "Timeout" in error_name:
                 raise BrowserRenderError(
@@ -371,17 +397,15 @@ class PlaywrightBrowserRenderer:
                 state=SourceState.FAILED,
             ) from error
         finally:
-            for name in ("context", "browser"):
-                value = locals().get(name)
-                if value is not None:
-                    try:
-                        value.close()
-                    except Exception:
-                        pass
-            try:
-                runtime.__exit__(None, None, None)
-            except AttributeError:
-                pass
+            if context is not None:
+                with suppress(Exception):  # noqa: BLE001 - cleanup only
+                    context.close()
+            if browser is not None:
+                with suppress(Exception):  # noqa: BLE001 - cleanup only
+                    browser.close()
+            if entered:
+                with suppress(Exception):  # noqa: BLE001 - cleanup only
+                    runtime.__exit__(None, None, None)
 
 
 __all__ = [
