@@ -47,7 +47,11 @@ def _create_job(database: PostgresDatabase, analysis_id: str) -> None:
     request = AnalysisRequestV1(
         analysis_id=analysis_id,
         requested_at=now,
-        territory=TerritoryContext(analysis_id=analysis_id, city="Казань"),
+        territory=TerritoryContext(
+            analysis_id=analysis_id,
+            city="Казань",
+            address="Кремль",
+        ),
     )
     PostgresJobStore(database).create_idempotent(JobRecord.new(request, now))
 
