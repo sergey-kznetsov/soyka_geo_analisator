@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import UTC
 from threading import Event, Thread
 
+from ..contracts import JobStatus
 from ..integration import AnalysisRequestV1
 from ..orchestration import (
     ConcurrentUpdateError,
@@ -56,9 +57,17 @@ class WorkerControl:
         return record
 
     def retry(self, analysis_id: str) -> JobRecord:
-        record = self.orchestrator.retry_failed(analysis_id)
+        current = self.orchestrator.status(analysis_id)
+        if current.status is not JobStatus.FAILED:
+            return self.orchestrator.retry_failed(analysis_id)
         self.queue.retry(analysis_id)
-        return record
+        try:
+            return self.orchestrator.retry_failed(analysis_id)
+        except BaseException:
+            try:
+                self.queue.request_cancel(analysis_id)
+            finally:
+                raise
 
 
 class OrchestratorExecutor:
