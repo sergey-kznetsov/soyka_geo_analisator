@@ -13,7 +13,8 @@
   "license_reviewed": true,
   "limitations": [
     "Natasha LOC extraction is optimized for Russian news text rather than arbitrary postal-address strings.",
-    "SOIKA rules-v2 is the precision-first primary extractor for explicit addresses; Natasha is a fallback.",
+    "SOIKA rules-v3 is the precision-first extractor for explicit and bounded short free-form house addresses; Natasha remains a fallback for location mentions.",
+    "A recognized house request must not be silently downgraded to a street-only successful result.",
     "Only object levels listed in the qualified validation manifest may be treated as production-approved."
   ],
   "training_data_documented": true,

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .model_manager import LazyModelManager
-from .models import AddressMention, MentionSource
+from .models import AddressMention, LocationKind, MentionSource
 from .normalization import AddressNormalizer, is_missing
 
 
@@ -32,7 +32,12 @@ class MentionExtractor(Protocol):
 
 
 class RuleBasedMentionExtractor:
-    """Precision-oriented fallback for explicit address-like phrases."""
+    """Precision-oriented rules plus a bounded free-form address fallback.
+
+    Explicit street markers remain the preferred deterministic path. The
+    free-form fallback is intentionally limited to short address-shaped input
+    ending in a house number; it is not a general sentence parser.
+    """
 
     _street_type = (
         r"(?i:ул(?:ица)?|пр(?:оспект)?|пер(?:еулок)?|наб(?:ережная)?|"
@@ -65,28 +70,120 @@ class RuleBasedMentionExtractor:
             r"(?:\s+(?:[А-ЯЁA-Z0-9][А-Яа-яЁёA-Za-z0-9.\-\"()]*)){0,4}"
         ),
     )
+    _free_form_house_tail = re.compile(
+        r"(?<!\w)(?:(?i:д(?:ом)?\.?)\s*)?"
+        r"\d{1,5}[А-Яа-яA-Za-z]?"
+        r"(?:\s*(?i:к|корп(?:ус)?\.?)\s*\d+[А-Яа-яA-Za-z]?)?\s*$"
+    )
+    _free_form_allowed = re.compile(
+        r"^[А-Яа-яЁёA-Za-z0-9\s,./\\\-]+$"
+    )
+    _free_form_word = re.compile(r"[А-Яа-яЁёA-Za-z][А-Яа-яЁёA-Za-z.\-]*")
+    _streetish_word = re.compile(
+        r"(?:"
+        r"ск(?:ая|ой|ую|ий|ого|ому|ое|оею)|"
+        r"цк(?:ая|ой|ую|ий|ого|ому|ое)|"
+        r"(?:ов|ев|ёв|ин|ын|ан)а|"
+        r"ского|цкого|"
+        r"улица|проспект|переулок|набережная|бульвар|шоссе|проезд|площадь|дорога"
+        r")$",
+        re.I,
+    )
+    _street_title_words = frozenset(
+        {
+            "академика",
+            "героя",
+            "генерала",
+            "карла",
+            "маршала",
+            "адмирала",
+            "профессора",
+        }
+    )
+    _non_street_singletons = frozenset(
+        {
+            "дом",
+            "этаж",
+            "подъезд",
+            "квартира",
+            "корпус",
+            "офис",
+            "кабинет",
+            "школа",
+            "метро",
+            "маршрут",
+            "автобус",
+            "трамвай",
+            "человек",
+            "минут",
+            "часов",
+        }
+    )
 
     def __init__(self, normalizer: AddressNormalizer | None = None) -> None:
         self._normalizer = normalizer or AddressNormalizer()
 
     @property
     def identity(self) -> Mapping[str, Any]:
-        return {"type": "rules", "version": "2"}
+        return {"type": "rules", "version": "3"}
+
+    @classmethod
+    def _looks_like_short_free_form_house(cls, text: str) -> tuple[int, int] | None:
+        stripped = text.strip()
+        if not stripped or len(stripped) > 96 or "\n" in stripped or "\r" in stripped:
+            return None
+        if not cls._free_form_allowed.fullmatch(stripped):
+            return None
+        tail = cls._free_form_house_tail.search(stripped)
+        if tail is None or tail.start() <= 0:
+            return None
+        prefix = stripped[: tail.start()].strip(" ,.-")
+        words = cls._free_form_word.findall(prefix)
+        if not 1 <= len(words) <= 6:
+            return None
+        lowered = [word.casefold().strip(".") for word in words]
+        if len(lowered) == 1 and lowered[0] in cls._non_street_singletons:
+            return None
+
+        has_comma = "," in stripped
+        has_titlecase = any(word[:1].isupper() for word in words)
+        has_streetish_word = any(cls._streetish_word.search(word) for word in words)
+        has_street_title = any(word in cls._street_title_words for word in lowered)
+        if len(words) > 1 and not (
+            has_comma or has_titlecase or has_streetish_word or has_street_title
+        ):
+            return None
+        if len(words) == 1 and not (has_titlecase or has_streetish_word):
+            return None
+
+        start = text.find(stripped)
+        return start, start + len(stripped)
 
     def extract(self, text: str) -> AddressMention | None:
         if is_missing(text):
             return None
         matches = [pattern.search(text) for pattern in self._patterns]
         candidates = [match for match in matches if match is not None]
-        if not candidates:
+        if candidates:
+            match = min(candidates, key=lambda item: (item.start(), -len(item.group(0))))
+            return self._normalizer.normalize(
+                match.group(0),
+                confidence=0.58,
+                source=MentionSource.RULES,
+                span_start=match.start(),
+                span_end=match.end(),
+            )
+
+        free_form_span = self._looks_like_short_free_form_house(text)
+        if free_form_span is None:
             return None
-        match = min(candidates, key=lambda item: (item.start(), -len(item.group(0))))
+        start, end = free_form_span
         return self._normalizer.normalize(
-            match.group(0),
-            confidence=0.58,
+            text[start:end],
+            confidence=0.56,
             source=MentionSource.RULES,
-            span_start=match.start(),
-            span_end=match.end(),
+            span_start=start,
+            span_end=end,
         )
 
 
@@ -251,7 +348,7 @@ class NatashaAddressExtractor:
 
 
 class CompositeMentionExtractor:
-    """Use primary NER, then Natasha, then deterministic rules."""
+    """Preserve extractor precedence, but do not discard a complete house mention."""
 
     def __init__(self, extractors: Sequence[MentionExtractor]) -> None:
         self._extractors = tuple(extractors)
@@ -268,8 +365,13 @@ class CompositeMentionExtractor:
         }
 
     def extract(self, text: str) -> AddressMention | None:
+        first: AddressMention | None = None
         for extractor in self._extractors:
             mention = extractor.extract(text)
-            if mention is not None:
+            if mention is None:
+                continue
+            if first is None:
+                first = mention
+            if mention.kind is LocationKind.HOUSE and mention.house_number:
                 return mention
-        return None
+        return first

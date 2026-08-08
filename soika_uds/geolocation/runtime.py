@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 from .crs import metric_crs_for
 from .extraction import MentionExtractor
 from .models import (
     ALGORITHM_VERSION,
+    AddressMention,
     GeocodingCandidate,
     GeolocationBatchResult,
     GeolocationConfig,
     GeolocationStats,
+    LocationKind,
     MessageGeolocationResult,
     digest_json,
 )
@@ -24,6 +28,62 @@ class GeolocationProviderError(RuntimeError):
     def __init__(self, message: str, *, retryable: bool) -> None:
         super().__init__(message)
         self.retryable = retryable
+
+
+def _strip_city_context(mention: AddressMention, city: str | None) -> AddressMention:
+    """Remove an explicitly known city from street comparison components.
+
+    Free-form input can legitimately contain both city and street, for example
+    ``Ижевск Пушкинская 277``. Nominatim should still receive the original
+    phrase, while semantic street ranking must compare ``Пушкинская`` with the
+    candidate road rather than ``Ижевск Пушкинская``.
+    """
+
+    if (
+        not city
+        or mention.kind not in {LocationKind.HOUSE, LocationKind.STREET}
+        or not mention.street
+    ):
+        return mention
+    cleaned_city = city.strip()
+    if not cleaned_city:
+        return mention
+    escaped = re.escape(cleaned_city)
+    street = mention.street.strip()
+    leading = re.compile(
+        rf"^(?:(?:г(?:ород)?\.?)\s*)?{escaped}\s*[,.;:\-]?\s*",
+        re.I,
+    )
+    trailing = re.compile(
+        rf"\s*[,.;:\-]?\s*(?:(?:г(?:ород)?\.?)\s*)?{escaped}$",
+        re.I,
+    )
+    normalized_street = leading.sub("", street, count=1).strip(" ,.;:-")
+    normalized_street = trailing.sub("", normalized_street, count=1).strip(
+        " ,.;:-"
+    )
+    if not normalized_street or normalized_street == street:
+        return mention
+    normalized = normalized_street.casefold().replace("ё", "е")
+    if mention.kind is LocationKind.HOUSE and mention.house_number:
+        normalized = f"{normalized}, {mention.house_number.casefold()}"
+    return replace(mention, street=normalized_street, normalized=normalized)
+
+
+def _select_candidate(
+    mention: AddressMention,
+    candidates: Sequence[GeocodingCandidate],
+) -> GeocodingCandidate:
+    """Prefer a candidate that preserves the requested address precision."""
+
+    if mention.kind is LocationKind.HOUSE:
+        exact_house = next(
+            (item for item in candidates if item.kind is LocationKind.HOUSE),
+            None,
+        )
+        if exact_house is not None:
+            return exact_house
+    return candidates[0]
 
 
 class GeolocationEngine:
@@ -173,6 +233,7 @@ class GeolocationEngine:
                     )
                 )
                 continue
+            mention = _strip_city_context(mention, effective_city)
             candidates = self._search(mention, city=effective_city)
             if not candidates:
                 unresolved += 1
@@ -190,19 +251,24 @@ class GeolocationEngine:
                     )
                 )
                 continue
-            selected = candidates[0]
+            selected = _select_candidate(mention, candidates)
             confidence = round(
                 mention.confidence * selected.confidence,
                 6,
             )
             included = confidence >= self._config.min_confidence
             reasons: tuple[str, ...]
-            if included:
-                resolved += 1
+            if mention.kind is LocationKind.HOUSE and selected.kind is not LocationKind.HOUSE:
+                included = False
+                reasons = ("house_candidate_not_resolved",)
+            elif included:
                 reasons = ()
             else:
-                low_confidence += 1
                 reasons = ("geolocation_below_threshold",)
+            if included:
+                resolved += 1
+            else:
+                low_confidence += 1
             results.append(
                 MessageGeolocationResult(
                     message_key=key,

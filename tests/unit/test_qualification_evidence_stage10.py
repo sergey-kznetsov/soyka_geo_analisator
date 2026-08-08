@@ -18,9 +18,9 @@ def test_committed_geolocation_evidence_is_consistent() -> None:
     summary = MODULE.verify_files()
 
     assert summary == {
-        "report_digest": "0d68d8c102da8548703b0468e64f429cd9c9a8d0a210aa40674a55c441bbfd73",
-        "registry_digest": "6f3be8ddd720bce2b29183a44640dacccac24fd3a9146ec7c3c2c9605b586da9",
-        "prediction_digest": "141228c900845bc300ebfff79705cc06caf2adb83aeec05ccd5b0f39348d6bf2",
+        "report_digest": "1caf3948277aa83c89c9d87ba7eb78ec28fe116a04a3dec6f404b4990247b39a",
+        "registry_digest": "15aebed2c9a26481671780aae284fde11d7fea12314beda3dccc6094a072f40c",
+        "prediction_digest": "4b2dc32f527d5081476d2e726b52764d3474fc6f36b7ae4a4ca7cdf8a8203848",
         "validation_digest": "67a9573b285f0a8343f9e966fd1951b2fc1a9a3c5f36d8f72aae140b8d791685",
         "samples": 24,
     }
