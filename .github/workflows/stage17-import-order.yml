@@ -1,0 +1,54 @@
+name: stage17-import-order
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 1
+      - name: Fix import block deterministically
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("soika_uds/parsers/connectors/adapters.py")
+          text = path.read_text(encoding="utf-8")
+          old = (
+              "from urllib.parse import urlencode, urljoin, urlsplit\n"
+              "from defusedxml.ElementTree import fromstring as safe_xml_fromstring\n"
+              "from xml.etree import ElementTree\n"
+          )
+          new = (
+              "from urllib.parse import urlencode, urljoin, urlsplit\n"
+              "from xml.etree import ElementTree\n\n"
+              "from defusedxml.ElementTree import fromstring as safe_xml_fromstring\n"
+          )
+          if text.count(old) != 1:
+              raise SystemExit("expected exactly one Stage 17 import block")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+      - name: Verify Ruff import ordering
+        run: |
+          python -m pip install --quiet ruff==0.6.9
+          ruff check soika_uds/parsers/connectors/adapters.py
+      - name: Commit fix and remove one-shot workflow
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/stage17-import-order.yml
+          git add soika_uds/parsers/connectors/adapters.py
+          git commit -m "Fix hardened XML import ordering"
+          git push origin "HEAD:${HEAD_BRANCH}"
