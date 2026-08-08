@@ -209,7 +209,9 @@ class GeoScope:
         object.__setattr__(self, "label", _optional_text(self.label, "label"))
         object.__setattr__(self, "osm_type", _optional_text(self.osm_type, "osm_type"))
         if self.osm_id is not None and (
-            isinstance(self.osm_id, bool) or not isinstance(self.osm_id, int) or self.osm_id <= 0
+            isinstance(self.osm_id, bool)
+            or not isinstance(self.osm_id, int)
+            or self.osm_id <= 0
         ):
             raise ValueError("osm_id must be a positive integer")
         aliases = tuple(
@@ -312,7 +314,11 @@ class SourceCandidate:
     metadata: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "candidate_id", _required_text(self.candidate_id, "candidate_id"))
+        object.__setattr__(
+            self,
+            "candidate_id",
+            _required_text(self.candidate_id, "candidate_id"),
+        )
         if not isinstance(self.kind, SourceKind):
             raise TypeError("kind must be SourceKind")
         url = canonical_url(self.url)
@@ -351,9 +357,7 @@ class SourceCandidate:
         active: bool,
         geo_evidence: tuple[str, ...],
     ) -> SourceCandidate:
-        digest = hashlib.sha256(
-            f"{kind.value}\n{hit.url}".encode("utf-8")
-        ).hexdigest()[:24]
+        digest = hashlib.sha256(f"{kind.value}\n{hit.url}".encode()).hexdigest()[:24]
         return cls(
             candidate_id=f"web:{digest}",
             kind=kind,
