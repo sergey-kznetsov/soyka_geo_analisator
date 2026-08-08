@@ -43,6 +43,26 @@ markers = "<empty>"
     )
 
 
+def test_export_uses_main_marker_from_group_mapping(tmp_path: Path) -> None:
+    lock = _write_lock(
+        tmp_path,
+        """
+[[package]]
+name = "colorama"
+version = "0.4.6"
+groups = ["main", "dev"]
+
+[package.markers]
+main = "platform_system == 'Windows'"
+dev = "sys_platform == 'win32'"
+""".strip(),
+    )
+
+    assert _locked_main_requirements(lock) == (
+        "colorama==0.4.6 ; platform_system == 'Windows'",
+    )
+
+
 def test_export_rejects_conflicting_unmarked_versions(tmp_path: Path) -> None:
     lock = _write_lock(
         tmp_path,
