@@ -1,0 +1,117 @@
+name: live-izhevsk-collection-acceptance
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.15"
+      - name: Install focused runtime
+        run: >-
+          python -m pip install --upgrade
+          pip
+          numpy==1.24.3
+          pyproj==3.7.2
+          shapely==2.0.1
+          pymorphy3==2.0.6
+          pymorphy3-dicts-ru==2.4.417150.4580142
+          defusedxml==0.7.1
+      - name: Run current-program address collection acceptance
+        run: |
+          mkdir -p build
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          from soika_uds.parsers.connectors import prepared_connector_definitions
+
+          address = "Ижевск Пушкинская 277"
+          city = "Ижевск"
+          sources = tuple(sorted(item.source_id for item in prepared_connector_definitions()))
+          source_policy_dir = Path("configs/sources")
+          policy_files = sorted(
+              str(path)
+              for path in source_policy_dir.glob("*.json")
+              if path.name != "source-policy-template.json"
+          )
+
+          rows = []
+          for definition in sorted(prepared_connector_definitions(), key=lambda item: item.source_id):
+              required = [option.name for option in definition.options if option.required]
+              # Html adapters for these connector families still require at least one concrete URL
+              # even where the catalog does not mark the URL option as required.
+              runtime_required = list(required)
+              if definition.source_id == "pikabu" and "community_urls" not in runtime_required:
+                  runtime_required.append("community_urls")
+              missing = runtime_required[:]  # address-only module request has no source-specific options
+              reasons = []
+              if not definition.network_enabled:
+                  reasons.append("connector_network_disabled")
+              if definition.lifecycle.value != "active":
+                  reasons.append(f"lifecycle_{definition.lifecycle.value}")
+              if missing:
+                  reasons.append("missing_source_options:" + ",".join(missing))
+              if not policy_files:
+                  reasons.append("no_committed_live_source_policy")
+              rows.append(
+                  {
+                      "source_id": definition.source_id,
+                      "display_name": definition.display_name,
+                      "network_enabled": definition.network_enabled,
+                      "lifecycle": definition.lifecycle.value,
+                      "required_runtime_options": runtime_required,
+                      "message_count": 0,
+                      "status": "blocked_before_collection" if reasons else "ready",
+                      "reasons": reasons,
+                  }
+              )
+
+          report = {
+              "schema_version": "1.0.0",
+              "test_kind": "live_address_collection_acceptance",
+              "mocked": False,
+              "fixture_data_used": False,
+              "address": address,
+              "city": city,
+              "requested_sources": list(sources),
+              "live_source_policy_files": policy_files,
+              "total_messages_collected": sum(item["message_count"] for item in rows),
+              "sources_with_messages": [item["source_id"] for item in rows if item["message_count"]],
+              "acceptance_passed": any(item["message_count"] > 0 for item in rows),
+              "sources": rows,
+              "criterion": "At least one real normalized SourceMessage with source URL must be collected; reachability-only probes do not count.",
+          }
+          Path("build/live-izhevsk-collection-acceptance.json").write_text(
+              json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+          if report["acceptance_passed"]:
+              raise SystemExit("unexpected: static readiness probe must not claim live collection")
+          PY
+      - name: Run real network reachability control without counting it as collection
+        continue-on-error: true
+        run: |
+          python -m soika_uds.parsers.connectors.external \
+            --targets configs/connectors/external-probe-targets.json \
+            --output build/live-network-reachability.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-izhevsk-acceptance
+          retention-days: 7
+          path: |
+            build/live-izhevsk-collection-acceptance.json
+            build/live-network-reachability.json
