@@ -1,19 +1,18 @@
 """Telegram public-channel collection through an authenticated MTProto user session.
 
-The collector never performs interactive login in a worker. Deployment must provide an
-already-authorized service-account session through secret files. Author identifiers are
-not retained by this collector.
+Workers never perform interactive login. Deployment supplies an already-authorized
+service-account session through secret files. Author identifiers are not retained.
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from ..contracts import SourceMessage
 from .collection import CandidateCollectionError, CandidateCollectionResult
@@ -26,6 +25,11 @@ from .models import (
     SourceState,
 )
 
+_RELEVANT_HINTS = frozenset({"house", "street", "district"})
+_IGNORED_REPLY_ERRORS = frozenset(
+    {"PeerIdInvalidError", "MsgIdInvalidError", "ChannelPrivateError"}
+)
+
 
 @dataclass(frozen=True, slots=True)
 class TelegramCredentials:
@@ -34,7 +38,12 @@ class TelegramCredentials:
     session_string: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.api_id, int) or isinstance(self.api_id, bool) or self.api_id <= 0:
+        invalid_api_id = (
+            not isinstance(self.api_id, int)
+            or isinstance(self.api_id, bool)
+            or self.api_id <= 0
+        )
+        if invalid_api_id:
             raise ValueError("Telegram api_id must be a positive integer")
         for name in ("api_hash", "session_string"):
             value = getattr(self, name)
@@ -62,18 +71,15 @@ class TelegramCredentials:
             ) from error
         try:
             api_id = int(raw_id)
+            return cls(
+                api_id=api_id,
+                api_hash=api_hash,
+                session_string=session,
+            )
         except ValueError as error:
             raise CandidateCollectionError(
                 SourceReasonCode.API_CREDENTIALS_MISSING,
-                "Telegram api_id secret is malformed",
-                state=SourceState.CONFIGURATION_MISSING,
-            ) from error
-        try:
-            return cls(api_id=api_id, api_hash=api_hash, session_string=session)
-        except ValueError as error:
-            raise CandidateCollectionError(
-                SourceReasonCode.API_CREDENTIALS_MISSING,
-                str(error),
+                f"Telegram credential secret is malformed: {error}",
                 state=SourceState.CONFIGURATION_MISSING,
             ) from error
 
@@ -116,15 +122,12 @@ def parse_telegram_target(url: str) -> TelegramTarget:
             "Telegram candidate is a private/invite link, not a public channel",
             state=SourceState.AUTH_REQUIRED,
         )
-    username = parts[0]
     message_id: int | None = None
     if len(parts) > 1:
-        try:
+        with suppress(ValueError):
             message_id = int(parts[1])
-        except ValueError:
-            message_id = None
     try:
-        return TelegramTarget(username=username, message_id=message_id)
+        return TelegramTarget(username=parts[0], message_id=message_id)
     except ValueError as error:
         raise CandidateCollectionError(
             SourceReasonCode.UNSUPPORTED_PAGE,
@@ -154,14 +157,26 @@ class TelegramRecord:
         object.__setattr__(self, "text", self.text.strip())
         if self.published_at.tzinfo is None or self.published_at.utcoffset() is None:
             raise ValueError("Telegram published_at must include UTC offset")
-        object.__setattr__(self, "published_at", self.published_at.astimezone(UTC))
+        object.__setattr__(
+            self,
+            "published_at",
+            self.published_at.astimezone(UTC),
+        )
         if self.parent_message_id is not None and (
-            not isinstance(self.parent_message_id, int) or self.parent_message_id <= 0
+            not isinstance(self.parent_message_id, int)
+            or self.parent_message_id <= 0
         ):
             raise ValueError("parent_message_id must be positive")
+        if self.is_comment and self.parent_message_id is None:
+            raise ValueError("Telegram comment requires parent_message_id")
 
     @property
     def url(self) -> str:
+        if self.is_comment and self.parent_message_id is not None:
+            return (
+                f"https://t.me/{self.channel_username}/{self.parent_message_id}"
+                f"?comment={self.message_id}"
+            )
         return f"https://t.me/{self.channel_username}/{self.message_id}"
 
 
@@ -177,7 +192,10 @@ class TelegramGateway(Protocol):
 
 
 class UnavailableTelegramGateway:
-    def __init__(self, reason: str = "Telegram MTProto credentials are not configured") -> None:
+    def __init__(
+        self,
+        reason: str = "Telegram MTProto credentials are not configured",
+    ) -> None:
         self.reason = reason
 
     def collect(
@@ -200,13 +218,14 @@ def _telethon_error(error: BaseException) -> CandidateCollectionError:
     name = type(error).__name__
     if name == "FloodWaitError":
         seconds = getattr(error, "seconds", None)
+        label = (
+            f"Telegram MTProto flood wait ({seconds}s)"
+            if isinstance(seconds, int)
+            else "Telegram MTProto flood wait"
+        )
         return CandidateCollectionError(
             SourceReasonCode.HTTP_429,
-            (
-                f"Telegram MTProto flood wait ({seconds}s)"
-                if isinstance(seconds, int)
-                else "Telegram MTProto flood wait"
-            ),
+            label,
             state=SourceState.UNAVAILABLE,
             retryable=True,
             details={"wait_seconds": seconds},
@@ -224,10 +243,14 @@ def _telethon_error(error: BaseException) -> CandidateCollectionError:
             f"Telegram MTProto authorization cannot access the source: {name}",
             state=SourceState.AUTH_REQUIRED,
         )
-    if name in {"UsernameInvalidError", "UsernameNotOccupiedError", "PeerIdInvalidError"}:
+    if name in {
+        "UsernameInvalidError",
+        "UsernameNotOccupiedError",
+        "PeerIdInvalidError",
+    }:
         return CandidateCollectionError(
             SourceReasonCode.NO_RESULTS,
-            f"Telegram public channel is unavailable or no longer exists: {name}",
+            f"Telegram public channel is unavailable or missing: {name}",
             state=SourceState.NO_RELEVANT_RESULTS,
         )
     return CandidateCollectionError(
@@ -238,8 +261,17 @@ def _telethon_error(error: BaseException) -> CandidateCollectionError:
     )
 
 
-def _message_record(message: Any, username: str, *, parent_id: int | None = None) -> TelegramRecord | None:
-    text = getattr(message, "raw_text", None) or getattr(message, "message", None) or ""
+def _message_record(
+    message: Any,
+    username: str,
+    *,
+    parent_id: int | None = None,
+) -> TelegramRecord | None:
+    text = (
+        getattr(message, "raw_text", None)
+        or getattr(message, "message", None)
+        or ""
+    )
     date = getattr(message, "date", None)
     message_id = getattr(message, "id", None)
     if not isinstance(text, str) or not text.strip():
@@ -270,9 +302,12 @@ class TelethonTelegramGateway:
             raise TypeError("credentials must be TelegramCredentials")
         for name in ("request_retries", "connection_retries"):
             value = getattr(self, name)
-            if not isinstance(value, int) or value < 0 or value > 5:
+            if not isinstance(value, int) or not 0 <= value <= 5:
                 raise ValueError(f"{name} must be in [0, 5]")
-        if not isinstance(self.timeout_seconds, int | float) or self.timeout_seconds <= 0:
+        if (
+            not isinstance(self.timeout_seconds, int | float)
+            or self.timeout_seconds <= 0
+        ):
             raise ValueError("timeout_seconds must be positive")
 
     def _client(self) -> Any:
@@ -298,12 +333,13 @@ class TelethonTelegramGateway:
     @staticmethod
     def _terms(search_terms: tuple[str, ...]) -> tuple[str, ...]:
         result: list[str] = []
+        seen: set[str] = set()
         for item in search_terms:
             cleaned = " ".join(item.split()).strip()
-            if len(cleaned) >= 3 and cleaned.casefold() not in {
-                value.casefold() for value in result
-            }:
+            key = cleaned.casefold()
+            if len(cleaned) >= 3 and key not in seen:
                 result.append(cleaned)
+                seen.add(key)
         return tuple(result[:4])
 
     def collect(
@@ -328,80 +364,103 @@ class TelethonTelegramGateway:
                     state=SourceState.AUTH_REQUIRED,
                 )
             entity = client.get_entity(target.username)
-            messages: list[Any] = []
-            if target.message_id is not None:
-                message = client.get_messages(entity, ids=target.message_id)
-                if message is not None:
-                    messages.append(message)
-            else:
-                terms = self._terms(search_terms)
-                if terms:
-                    seen: set[int] = set()
-                    per_term = max(5, history_limit // len(terms))
-                    for term in terms:
-                        for message in client.iter_messages(
-                            entity,
-                            search=term,
-                            limit=per_term,
-                        ):
-                            message_id = getattr(message, "id", None)
-                            if isinstance(message_id, int) and message_id not in seen:
-                                messages.append(message)
-                                seen.add(message_id)
-                            if len(messages) >= history_limit:
-                                break
-                        if len(messages) >= history_limit:
-                            break
-                else:
-                    messages.extend(client.iter_messages(entity, limit=history_limit))
-
-            records: list[TelegramRecord] = []
-            seen_records: set[tuple[int, bool]] = set()
-            for message in messages[:history_limit]:
-                record = _message_record(message, target.username)
-                if record is None:
-                    continue
-                key = (record.message_id, False)
-                if key not in seen_records:
-                    records.append(record)
-                    seen_records.add(key)
-                if comments_per_post <= 0:
-                    continue
-                try:
-                    replies = client.iter_messages(
-                        entity,
-                        reply_to=record.message_id,
-                        limit=comments_per_post,
-                    )
-                    for reply in replies:
-                        comment = _message_record(
-                            reply,
-                            target.username,
-                            parent_id=record.message_id,
-                        )
-                        if comment is None:
-                            continue
-                        comment_key = (comment.message_id, True)
-                        if comment_key not in seen_records:
-                            records.append(comment)
-                            seen_records.add(comment_key)
-                except Exception as error:  # noqa: BLE001 - comments are optional
-                    if type(error).__name__ not in {
-                        "PeerIdInvalidError",
-                        "MsgIdInvalidError",
-                        "ChannelPrivateError",
-                    }:
-                        raise
-            return tuple(records)
+            messages = self._messages(
+                client,
+                entity,
+                target,
+                search_terms=search_terms,
+                history_limit=history_limit,
+            )
+            return self._records(
+                client,
+                entity,
+                target.username,
+                messages,
+                comments_per_post=comments_per_post,
+            )
         except CandidateCollectionError:
             raise
-        except Exception as error:  # noqa: BLE001 - MTProto boundary
+        except Exception as error:  # noqa: BLE001 - MTProto isolation boundary
             raise _telethon_error(error) from error
         finally:
-            try:
+            with suppress(Exception):  # noqa: BLE001 - cleanup only
                 client.disconnect()
-            except Exception:
-                pass
+
+    def _messages(
+        self,
+        client: Any,
+        entity: Any,
+        target: TelegramTarget,
+        *,
+        search_terms: tuple[str, ...],
+        history_limit: int,
+    ) -> list[Any]:
+        if target.message_id is not None:
+            message = client.get_messages(entity, ids=target.message_id)
+            return [message] if message is not None else []
+        terms = self._terms(search_terms)
+        if not terms:
+            return list(client.iter_messages(entity, limit=history_limit))
+        messages: list[Any] = []
+        seen: set[int] = set()
+        per_term = max(5, history_limit // len(terms))
+        for term in terms:
+            for message in client.iter_messages(
+                entity,
+                search=term,
+                limit=per_term,
+            ):
+                message_id = getattr(message, "id", None)
+                if isinstance(message_id, int) and message_id not in seen:
+                    messages.append(message)
+                    seen.add(message_id)
+                if len(messages) >= history_limit:
+                    return messages
+        return messages
+
+    @staticmethod
+    def _records(
+        client: Any,
+        entity: Any,
+        username: str,
+        messages: list[Any],
+        *,
+        comments_per_post: int,
+    ) -> tuple[TelegramRecord, ...]:
+        records: list[TelegramRecord] = []
+        seen: set[tuple[int, bool]] = set()
+        for message in messages:
+            record = _message_record(message, username)
+            if record is None:
+                continue
+            key = (record.message_id, False)
+            if key not in seen:
+                records.append(record)
+                seen.add(key)
+            if comments_per_post <= 0:
+                continue
+            try:
+                replies = client.iter_messages(
+                    entity,
+                    reply_to=record.message_id,
+                    limit=comments_per_post,
+                )
+                for reply in replies:
+                    comment = _message_record(
+                        reply,
+                        username,
+                        parent_id=record.message_id,
+                    )
+                    if comment is None:
+                        continue
+                    comment_key = (comment.message_id, True)
+                    if comment_key not in seen:
+                        records.append(comment)
+                        seen.add(comment_key)
+            except Exception as error:  # noqa: BLE001 - comments are optional
+                if type(error).__name__ not in _IGNORED_REPLY_ERRORS:
+                    raise
+        return tuple(records)
 
 
 def telegram_search_terms(scope: GeoScope) -> tuple[str, ...]:
@@ -416,15 +475,21 @@ def telegram_search_terms(scope: GeoScope) -> tuple[str, ...]:
     if scope.street:
         terms.append(f"{scope.city} {scope.street}")
     terms.append(scope.raw_address)
-    return tuple(dict.fromkeys(" ".join(item.split()) for item in terms if item.strip()))
+    return tuple(
+        dict.fromkeys(" ".join(item.split()) for item in terms if item.strip())
+    )
+
+
+def _normalize(value: str) -> str:
+    return " ".join(value.casefold().replace("ё", "е").split())
 
 
 def _relevance(text: str, scope: GeoScope) -> str:
-    normalized = " ".join(text.casefold().replace("ё", "е").split())
-    street = " ".join((scope.street or "").casefold().replace("ё", "е").split())
-    house = " ".join((scope.house_number or "").casefold().split())
-    district = " ".join((scope.district or "").casefold().replace("ё", "е").split())
-    city = " ".join(scope.city.casefold().replace("ё", "е").split())
+    normalized = _normalize(text)
+    street = _normalize(scope.street or "")
+    house = _normalize(scope.house_number or "")
+    district = _normalize(scope.district or "")
+    city = _normalize(scope.city)
     if street and house and street in normalized and house in normalized:
         return "house"
     if street and street in normalized:
@@ -459,9 +524,10 @@ class TelegramCollector:
         if candidate.kind is not SourceKind.TELEGRAM:
             raise ValueError("candidate must be Telegram")
         target = parse_telegram_target(candidate.url)
+        terms = telegram_search_terms(scope)
         records = self.gateway.collect(
             target,
-            search_terms=telegram_search_terms(scope),
+            search_terms=terms,
             history_limit=self.history_limit,
             comments_per_post=self.comments_per_post,
         )
@@ -469,8 +535,7 @@ class TelegramCollector:
         relevant = 0
         for record in records:
             relevance = _relevance(record.text, scope)
-            if relevance in {"house", "street", "district"}:
-                relevant += 1
+            relevant += int(relevance in _RELEVANT_HINTS)
             messages.append(
                 SourceMessage(
                     source="telegram",
@@ -483,7 +548,11 @@ class TelegramCollector:
                     url=record.url,
                     author_id=None,
                     metadata={
-                        "kind": "telegram_comment" if record.is_comment else "telegram_post",
+                        "kind": (
+                            "telegram_comment"
+                            if record.is_comment
+                            else "telegram_post"
+                        ),
                         "channel_username": record.channel_username,
                         "parent_message_id": record.parent_message_id,
                         "geo_relevance_hint": relevance,
@@ -498,7 +567,10 @@ class TelegramCollector:
         else:
             state = SourceState.NO_RELEVANT_RESULTS
             reason_code = SourceReasonCode.NO_RESULTS
-            reason = "Telegram public channel was accessible but returned no matching public messages"
+            reason = (
+                "Telegram public channel was accessible but returned no "
+                "matching public messages"
+            )
         return CandidateCollectionResult(
             messages=tuple(messages),
             outcome=SourceOutcome(
@@ -513,7 +585,7 @@ class TelegramCollector:
                 details={
                     "channel_username": target.username,
                     "target_message_id": target.message_id,
-                    "search_terms": list(telegram_search_terms(scope)),
+                    "search_terms": list(terms),
                     "comments_enabled": self.comments_per_post > 0,
                     "final_geo_filter_required": True,
                 },
