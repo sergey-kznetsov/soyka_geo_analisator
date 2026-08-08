@@ -40,8 +40,7 @@ class JobQueue(Protocol):
         priority: int = 0,
         max_attempts: int = 3,
         trace_id: str | None = None,
-    ) -> QueueItem:
-        ...
+    ) -> QueueItem: ...
 
     def claim(
         self,
@@ -49,8 +48,7 @@ class JobQueue(Protocol):
         worker_id: str,
         compute_class: ComputeClass,
         lease_seconds: float,
-    ) -> QueueItem | None:
-        ...
+    ) -> QueueItem | None: ...
 
     def renew(
         self,
@@ -58,8 +56,7 @@ class JobQueue(Protocol):
         *,
         worker_id: str,
         lease_seconds: float,
-    ) -> QueueItem:
-        ...
+    ) -> QueueItem: ...
 
     def release(
         self,
@@ -69,23 +66,17 @@ class JobQueue(Protocol):
         retryable: bool,
         retry_delay_seconds: float,
         error: Mapping[str, object],
-    ) -> QueueItem:
-        ...
+    ) -> QueueItem: ...
 
-    def ack(self, analysis_id: str, *, worker_id: str) -> None:
-        ...
+    def ack(self, analysis_id: str, *, worker_id: str) -> None: ...
 
-    def request_cancel(self, analysis_id: str) -> QueueItem:
-        ...
+    def request_cancel(self, analysis_id: str) -> QueueItem: ...
 
-    def is_cancel_requested(self, analysis_id: str) -> bool:
-        ...
+    def is_cancel_requested(self, analysis_id: str) -> bool: ...
 
-    def retry(self, analysis_id: str) -> QueueItem:
-        ...
+    def retry(self, analysis_id: str) -> QueueItem: ...
 
-    def stats(self, compute_class: ComputeClass) -> QueueStats:
-        ...
+    def stats(self, compute_class: ComputeClass) -> QueueStats: ...
 
 
 class PostgresJobQueue:
@@ -388,7 +379,9 @@ class PostgresJobQueue:
                 "count(*) FILTER (WHERE cancel_requested = TRUE) AS cancelled, "
                 "COALESCE(EXTRACT(EPOCH FROM clock_timestamp() - MIN(available_at) "
                 "FILTER (WHERE cancel_requested = FALSE AND attempt < max_attempts "
-                "AND available_at <= clock_timestamp() AND lease_owner IS NULL)), 0) "
+                "AND available_at <= clock_timestamp() "
+                "AND (lease_owner IS NULL "
+                "OR lease_expires_at <= clock_timestamp()))), 0) "
                 "AS oldest_ready_age_seconds "
                 "FROM ga_core.job_queue "
                 "WHERE application_id = %s AND compute_class = %s",
