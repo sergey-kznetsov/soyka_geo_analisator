@@ -3,11 +3,7 @@ from __future__ import annotations
 import socket
 from datetime import UTC, datetime
 
-from geo_analyzer.modules import (
-    HttpAnalysisModuleConnector,
-    ModuleAnalysisRequest,
-    ModuleStatus,
-)
+from geo_analyzer.modules import HttpAnalysisModuleConnector, ModuleAnalysisRequest, ModuleStatus
 from soika_uds.integration import ResultProvenance, schema_bundle_digest
 from soika_uds.orchestration import (
     PIPELINE_STAGES,
