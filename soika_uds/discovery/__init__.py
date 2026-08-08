@@ -1,5 +1,7 @@
 """Geo-first source discovery for Russian urban-content collection."""
 
+# ruff: noqa: I001
+
 from .access import (
     DirectorySourcePolicyResolver,
     NetworkRobotsEvaluator,
