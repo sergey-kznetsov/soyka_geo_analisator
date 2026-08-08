@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: I001
+
 from soika_uds.discovery import (
     CandidateCollectionError,
     GeoScope,
