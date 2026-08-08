@@ -1,9 +1,14 @@
 # Telegram MTProto runtime for public-channel collection.
+# Hashes below match artifacts currently published by PyPI.
+# pyasn1 0.6.4 includes the fixes for the 2026 ASN.1 decoder DoS advisories.
 Telethon==1.44.0 \
-    --hash=sha256:3125aec864445ab1e5693c8777a916bf5cd6ef529e6be5a28448417659e22d3a
+    --hash=sha256:52fc49efb67a4916c2aedcb295ad286f4afa2aba9bf15d83ed2acdc64af0c718 \
+    --hash=sha256:7de1473e9e412e20bd57b102d8f50d48372712462be9ff6c003bb81c50ad7e98
 pyaes==1.6.1 \
-    --hash=sha256:01c8d4d9c8c8d13f7c1f60c6e43f8ba151f12503055a9128dceec086de0e9120
+    --hash=sha256:02c1b1405c38d3c370b085fb952dd8bea3fadcee6411ad99f312cc129c536d8f
 rsa==4.9.1 \
-    --hash=sha256:8a5db425aa8fca500c6f2be233825f8f7cba1b5213023df54492311692f0a994
+    --hash=sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762 \
+    --hash=sha256:e7bdbfdb5497da4c07dfd35530e1a902659db6ff241e39d9953cad06ebd0ae75
 pyasn1==0.6.4 \
-    --hash=sha256:59c432403d18e481f8819a04361c6bd2c750c2b2219d7eb510b07294ea9e65f4
+    --hash=sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b \
+    --hash=sha256:9c447d8431c947fe4c8febc4ed9e760bc29011a5b01e5c74b67025bd9fb8ce81
