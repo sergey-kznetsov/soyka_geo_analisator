@@ -8,7 +8,11 @@ import pytest
 
 from soika_uds.contracts import TerritoryContext
 from soika_uds.integration import AnalysisRequestV1
-from soika_uds.orchestration import InMemoryJobStore, SoikaOrchestrator
+from soika_uds.orchestration import (
+    InMemoryJobStore,
+    JobLeaseError,
+    SoikaOrchestrator,
+)
 from soika_uds.worker import ComputeClass, OrchestratorExecutor, WorkerControl
 from soika_uds.worker.cli import (
     _postgres_application_name,
@@ -123,6 +127,48 @@ def test_submit_recovers_after_temporary_queue_failure() -> None:
     assert record.analysis_id == persisted.analysis_id
     assert item.analysis_id == persisted.analysis_id
     assert queue.enqueued == [(request.analysis_id, ComputeClass.CPU)]
+
+
+def test_queue_only_retry_recovers_nonterminal_job_after_lease_expiry() -> None:
+    now = datetime.now(UTC)
+    store = InMemoryJobStore()
+    orchestrator = SoikaOrchestrator(store, {}, clock=lambda: now)
+    record = orchestrator.submit(_request("stage14-infra-exhausted"))
+    expired = replace(
+        record,
+        lease_owner="dead-worker",
+        lease_expires_at=now - timedelta(seconds=1),
+        updated_at=now - timedelta(seconds=1),
+    )
+    store.save(expired, expected_revision=record.revision)
+    queue = ControlQueue()
+    control = WorkerControl(orchestrator, queue)
+
+    recovered = control.retry(record.analysis_id)
+
+    assert recovered.status == record.status
+    assert queue.retried == [record.analysis_id]
+
+
+def test_queue_only_retry_rejects_live_orchestration_lease() -> None:
+    now = datetime.now(UTC)
+    store = InMemoryJobStore()
+    orchestrator = SoikaOrchestrator(store, {}, clock=lambda: now)
+    record = orchestrator.submit(_request("stage14-live-lease"))
+    leased = replace(
+        record,
+        lease_owner="live-worker",
+        lease_expires_at=now + timedelta(minutes=1),
+        updated_at=now,
+    )
+    store.save(leased, expected_revision=record.revision)
+    queue = ControlQueue()
+    control = WorkerControl(orchestrator, queue)
+
+    with pytest.raises(JobLeaseError, match="active orchestration lease"):
+        control.retry(record.analysis_id)
+
+    assert queue.retried == []
 
 
 def test_orchestrator_executor_renews_only_owned_lease() -> None:
