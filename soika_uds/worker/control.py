@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from threading import Event, Thread
 
 from ..integration import AnalysisRequestV1
-from ..orchestration import ConcurrentUpdateError, JobLeaseError, JobRecord, SoikaOrchestrator
+from ..orchestration import (
+    ConcurrentUpdateError,
+    JobLeaseError,
+    JobRecord,
+    SoikaOrchestrator,
+)
 from .models import ComputeClass, QueueItem, WorkerContext
 from .queue import JobQueue
 
@@ -79,10 +85,37 @@ class OrchestratorExecutor:
             except ConcurrentUpdateError:
                 continue
 
+    @staticmethod
+    def _renew(orchestrator: SoikaOrchestrator, analysis_id: str) -> None:
+        for _ in range(3):
+            record = orchestrator.store.load(analysis_id)
+            if record.terminal:
+                return
+            if record.lease_owner != orchestrator.worker_id:
+                raise JobLeaseError(
+                    f"job {analysis_id} is not leased by {orchestrator.worker_id}"
+                )
+            now = orchestrator._now()
+            updated = replace(
+                record,
+                updated_at=now,
+                lease_expires_at=now + orchestrator.lease_ttl,
+            )
+            try:
+                orchestrator.store.save(updated, expected_revision=record.revision)
+                return
+            except ConcurrentUpdateError:
+                continue
+        raise ConcurrentUpdateError(
+            f"job {analysis_id} changed during orchestration lease renewal"
+        )
+
     def __call__(self, context: WorkerContext) -> JobRecord:
         orchestrator = self.factory(context)
         if not isinstance(orchestrator, SoikaOrchestrator):
             raise TypeError("orchestrator factory must return SoikaOrchestrator")
+        if orchestrator.worker_id != context.worker_id:
+            raise ValueError("orchestrator worker_id must match WorkerContext")
         finished = Event()
 
         def _monitor() -> None:
@@ -90,10 +123,8 @@ class OrchestratorExecutor:
                 if context.cancel_requested:
                     self._request_cancel(orchestrator, context.analysis_id)
                 try:
-                    orchestrator.renew_lease(context.analysis_id)
-                except JobLeaseError:
-                    continue
-                except ConcurrentUpdateError:
+                    self._renew(orchestrator, context.analysis_id)
+                except (JobLeaseError, ConcurrentUpdateError):
                     continue
 
         monitor = Thread(
