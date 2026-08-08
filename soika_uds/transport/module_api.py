@@ -1,27 +1,30 @@
 """Stable server-to-server module protocol adapter for Geo Analyzer.
 
 The adapter deliberately translates the generic Geo Analyzer module protocol into
-SOIKA's existing transport-neutral orchestration contract.  Geo Analyzer never
+SOIKA's existing transport-neutral orchestration contract. Geo Analyzer never
 needs to import SOIKA Python code or know about its internal pipeline stages.
 """
 
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
 from ..contracts import JobStatus, TerritoryContext
-from ..integration import AnalysisRequestV1, ResultProvenance
-from ..orchestration import OrchestrationError, SoikaOrchestrator
+from ..integration import (
+    AnalysisRequestV1,
+    ContractValidationError,
+    IdempotencyConflictError,
+    ResultProvenance,
+)
+from ..orchestration import JobNotFoundError, OrchestrationError, SoikaOrchestrator
 from ..worker import ComputeClass, WorkerControl
 
 MODULE_PROTOCOL_VERSION = "1.0.0"
 SOIKA_MODULE_ID = "soyka.reviews"
 SOIKA_MODULE_VERSION = "0.20.0"
-_MODULE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,127}$")
 
 
 class ModuleProtocolError(ValueError):
@@ -246,14 +249,12 @@ class SoikaModuleApi:
         allow_partial = data.get("allow_partial", True)
         if not isinstance(allow_partial, bool):
             raise ModuleProtocolError("allow_partial must be a boolean")
-        idempotency_key = data.get("idempotency_key")
-        if idempotency_key is not None:
-            idempotency_key = _required_text(idempotency_key, "idempotency_key")
+        idempotency_key = _required_text(
+            data.get("idempotency_key"), "idempotency_key"
+        )
 
-        request = AnalysisRequestV1(
-            analysis_id=analysis_id,
-            requested_at=requested_at,
-            territory=TerritoryContext(
+        try:
+            territory = TerritoryContext(
                 analysis_id=analysis_id,
                 city=city,
                 address=address,
@@ -263,21 +264,26 @@ class SoikaModuleApi:
                 territory_geojson=territory_geojson,
                 sources=tuple(item.strip() for item in sources_value),
                 options=options,
-            ),
-            sources=tuple(item.strip() for item in sources_value),
-            options=options,
-            allow_partial=allow_partial,
-            idempotency_key=idempotency_key,
-        )
+            )
+            request = AnalysisRequestV1(
+                analysis_id=analysis_id,
+                requested_at=requested_at,
+                territory=territory,
+                sources=tuple(item.strip() for item in sources_value),
+                options=options,
+                allow_partial=allow_partial,
+                idempotency_key=idempotency_key,
+            )
+        except (ContractValidationError, ValueError) as error:
+            raise ModuleProtocolError(str(error)) from error
+
         try:
             record, _queue_item = self.control.submit(
                 request,
                 compute_class=ComputeClass.CPU,
             )
-        except Exception as error:
-            if type(error).__name__ == "IdempotencyConflictError":
-                raise ModuleConflictError(str(error)) from error
-            raise
+        except IdempotencyConflictError as error:
+            raise ModuleConflictError(str(error)) from error
         return self.status(record.analysis_id)
 
     def status(self, analysis_id: str) -> dict[str, Any]:
@@ -313,6 +319,8 @@ class SoikaModuleApi:
                 analysis_id,
                 self.provenance,
             )
+        except JobNotFoundError:
+            raise
         except OrchestrationError as error:
             raise ModuleResultNotReadyError(str(error)) from error
         raw = result.to_dict()
