@@ -1,5 +1,7 @@
 """Generic reviewed public-web collector with HTTP-first/browser-fallback access."""
 
+# ruff: noqa: I001
+
 from __future__ import annotations
 
 import hashlib
