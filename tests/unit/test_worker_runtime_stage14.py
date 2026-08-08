@@ -8,6 +8,7 @@ from threading import Event
 
 import pytest
 
+from soika_uds.contracts import JobStatus
 from soika_uds.worker import (
     ComputeClass,
     JsonLogFormatter,
@@ -222,6 +223,25 @@ def test_one_failed_job_does_not_block_the_next_job() -> None:
     assert calls == ["analysis-bad", "analysis-good"]
     assert queue.released == [("analysis-bad", True)]
     assert queue.acked == ["analysis-good"]
+
+
+def test_canonical_failed_result_is_parked_for_explicit_retry() -> None:
+    queue = FakeQueue([_item("analysis-domain-failed")])
+
+    class FailedResult:
+        status = JobStatus.FAILED
+
+    runtime = WorkerRuntime(
+        queue,
+        lambda _context: FailedResult(),
+        _settings(),
+        alert_sink=RecordingAlertSink(),
+    )
+
+    assert runtime.run_once() is True
+    assert queue.released == [("analysis-domain-failed", False)]
+    assert queue.acked == []
+    assert runtime.metrics.snapshot()["jobs_domain_failed_total"] == 1.0
 
 
 def test_wall_timeout_requeues_only_the_timed_out_job() -> None:
