@@ -14,6 +14,7 @@ from soika_uds.orchestration import (
     InMemoryJobStore,
     PipelineStage,
     SoikaOrchestrator,
+    StageContext,
     StageResult,
 )
 from soika_uds.transport import (
@@ -54,8 +55,8 @@ class FakeQueue:
         return object()
 
 
-def _handler(stage: PipelineStage) -> StageResult:
-    if stage is PipelineStage.FINALIZING:
+def _handler(context: StageContext) -> StageResult:
+    if context.stage is PipelineStage.FINALIZING:
         return StageResult(
             output={
                 "coverage": {
@@ -80,8 +81,8 @@ def _handler(stage: PipelineStage) -> StageResult:
     return StageResult(output={})
 
 
-def _warning_handler(stage: PipelineStage) -> StageResult:
-    if stage is PipelineStage.FINALIZING:
+def _warning_handler(context: StageContext) -> StageResult:
+    if context.stage is PipelineStage.FINALIZING:
         return StageResult(
             output={
                 "coverage": {
