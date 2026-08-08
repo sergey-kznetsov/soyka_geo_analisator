@@ -187,7 +187,7 @@ from .spatial_filtering import (
     spatial_query_plan,
 )
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"
 
 __all__ = [
     "CURRENT_CONTRACT_VERSION",
