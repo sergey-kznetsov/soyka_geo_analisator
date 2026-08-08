@@ -62,7 +62,11 @@ def _request(analysis_id: str) -> AnalysisRequestV1:
     return AnalysisRequestV1(
         analysis_id=analysis_id,
         requested_at=datetime.now(UTC),
-        territory=TerritoryContext(analysis_id=analysis_id, city="Казань"),
+        territory=TerritoryContext(
+            analysis_id=analysis_id,
+            city="Казань",
+            address="Кремль",
+        ),
     )
 
 
