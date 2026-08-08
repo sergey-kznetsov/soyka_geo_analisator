@@ -1,0 +1,115 @@
+name: manual-izhevsk-address-probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/manual-izhevsk-address-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.15"
+          cache: pip
+
+      - name: Install locked geolocation runtime
+        run: |
+          python -m pip install --upgrade pip poetry==2.4.1
+          poetry install --only main --no-root --no-interaction
+          mkdir -p build/wheels
+          poetry run python -m pip download \
+            --no-deps \
+            --only-binary=:all: \
+            dawg2-python==0.9.0 \
+            --dest build/wheels
+          poetry run python -m pip uninstall -y dawg-python dawg2-python
+          poetry run python -m pip install \
+            --no-deps \
+            build/wheels/dawg2_python-0.9.0-py3-none-any.whl
+
+      - name: Probe address through Soyka production geolocation engine
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          mkdir -p build
+          poetry run python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from soika_uds.geolocation.cache import SQLiteResponseCache
+          from soika_uds.geolocation.extraction import (
+              CompositeMentionExtractor,
+              NatashaAddressExtractor,
+              RuleBasedMentionExtractor,
+          )
+          from soika_uds.geolocation.factory import public_nominatim_client
+          from soika_uds.geolocation.model_manager import LazyModelManager
+          from soika_uds.geolocation.models import GeolocationConfig
+          from soika_uds.geolocation.runtime import GeolocationEngine
+
+          manager = LazyModelManager()
+          extractor = CompositeMentionExtractor(
+              (RuleBasedMentionExtractor(), NatashaAddressExtractor(manager))
+          )
+          cache = SQLiteResponseCache(
+              Path("build/izhevsk-pushkinskaya-277.sqlite3"),
+              namespace="manual-izhevsk-pushkinskaya-277-v1",
+          )
+          provider = public_nominatim_client(
+              cache,
+              user_agent=(
+                  "SOIKA-UDS-Manual-Probe/0.20 "
+                  "(+https://github.com/sergey-kznetsov/soyka_geo_analisator)"
+              ),
+          )
+          engine = GeolocationEngine(
+              extractor,
+              provider,
+              config=GeolocationConfig(
+                  min_confidence=0.25,
+                  max_candidates=5,
+                  country_codes=("ru",),
+                  language="ru",
+              ),
+          )
+
+          inputs = (
+              {
+                  "message_key": "exact-user-input",
+                  "model_text": "Ижевск Пушкинская 277",
+                  "included_for_analysis": True,
+              },
+              {
+                  "message_key": "explicit-address-control",
+                  "model_text": "Ижевск, ул. Пушкинская, д. 277",
+                  "included_for_analysis": True,
+              },
+          )
+          batch = engine.geolocate(inputs, city="Ижевск")
+          payload = batch.to_dict()
+          print("SOIKA_PROBE_RESULT_BEGIN")
+          print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+          print("SOIKA_PROBE_RESULT_END")
+          Path("build/izhevsk-pushkinskaya-277-result.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload probe result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: izhevsk-pushkinskaya-277-soyka-result
+          retention-days: 7
+          if-no-files-found: warn
+          path: build/izhevsk-pushkinskaya-277-result.json
