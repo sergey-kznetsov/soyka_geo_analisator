@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import logging
 import os
 import socket
 from collections.abc import Callable, Sequence
@@ -22,8 +23,12 @@ ExecutorFactory = Callable[[PostgresDatabase, WorkerSettings], WorkerExecutor]
 
 
 def _default_worker_id(compute_class: ComputeClass) -> str:
-    hostname = socket.gethostname().replace("_", "-")[:48] or "host"
+    hostname = socket.gethostname().replace("_", "-")[:32] or "host"
     return f"soika-{compute_class.value}-{hostname}-{os.getpid()}"
+
+
+def _postgres_application_name(worker_id: str) -> str:
+    return worker_id[:63]
 
 
 def _read_secret_file(path: Path) -> str:
@@ -167,7 +172,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         database = PostgresDatabase(
             PostgresSettings(
                 dsn=dsn,
-                application_name=settings.worker_id,
+                application_name=_postgres_application_name(settings.worker_id),
                 min_pool_size=1,
                 max_pool_size=4,
             )
@@ -175,7 +180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         queue = PostgresJobQueue(database, application=args.application)
         if not queue.healthcheck():
             raise WorkerConfigurationError(
-                "ga_core.job_queue is missing; apply platform migrations first"
+                "ga_core.job_queue is missing; apply platform and worker migrations first"
             )
         factory = _load_executor_factory(args.executor)
         executor = factory(database, settings)
@@ -204,7 +209,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except WorkerConfigurationError as error:
         log_event(
             logger,
-            40,
+            logging.ERROR,
             "worker.configuration.error",
             "worker refused unsafe or incomplete configuration",
             error_type=type(error).__name__,
