@@ -117,7 +117,9 @@ def test_soak_cycles_leave_queue_healthy_and_empty(database: PostgresDatabase) -
     assert stats.delayed == 0
 
 
-def test_expired_worker_lease_is_recovered_without_old_owner_ack(database: PostgresDatabase) -> None:
+def test_expired_worker_lease_is_recovered_without_old_owner_ack(
+    database: PostgresDatabase,
+) -> None:
     queue = PostgresJobQueue(database)
     analysis_id = _analysis_id("failure-injection")
     _create_job(database, analysis_id)
