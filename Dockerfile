@@ -30,7 +30,7 @@ RUN apt-get update \
 RUN python -m pip install --upgrade pip setuptools wheel \
     && python -m pip install "poetry==${POETRY_VERSION}"
 
-COPY pyproject.toml poetry.lock requirements-storage.txt ./
+COPY pyproject.toml poetry.lock requirements-storage.txt requirements-telegram.txt ./
 RUN poetry install --only main --no-root --sync
 
 COPY README.md LICENSE ./
@@ -42,7 +42,12 @@ RUN poetry install --only main --sync \
     && .venv/bin/python -m pip install \
         --require-hashes \
         --no-deps \
-        -r requirements-storage.txt
+        -r requirements-storage.txt \
+    && .venv/bin/python -m pip install \
+        --require-hashes \
+        --no-deps \
+        -r requirements-telegram.txt \
+    && .venv/bin/python -c "import telethon; print(telethon.__version__)"
 
 FROM ${PYTHON_IMAGE} AS runtime-base
 

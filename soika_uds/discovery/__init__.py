@@ -54,6 +54,18 @@ from .providers import (
 )
 from .public_web import PublicWebCollector, geo_relevance_hint
 from .query import GeoQueryBuilder
+from .telegram import (
+    TelegramCollector,
+    TelegramCredentials,
+    TelegramGateway,
+    TelegramRecord,
+    TelegramTarget,
+    TelethonTelegramGateway,
+    UnavailableTelegramGateway,
+    build_telegram_collector_from_env,
+    parse_telegram_target,
+    telegram_search_terms,
+)
 from .territory import (
     TerritoryGeolocationEngine,
     TerritoryResolutionError,
@@ -97,15 +109,25 @@ __all__ = [
     "StaticHtmlFetcher",
     "StaticSourcePolicyResolver",
     "StdlibJsonPostTransport",
+    "TelegramCollector",
+    "TelegramCredentials",
+    "TelegramGateway",
+    "TelegramRecord",
+    "TelegramTarget",
+    "TelethonTelegramGateway",
     "TerritoryGeolocationEngine",
     "TerritoryResolutionError",
     "TerritoryResolver",
     "UnavailableSearchProvider",
+    "UnavailableTelegramGateway",
     "YandexSearchProvider",
+    "build_telegram_collector_from_env",
     "canonical_url",
     "classify_browser_block",
     "geo_evidence",
     "geo_relevance_hint",
+    "parse_telegram_target",
     "parse_yandex_xml",
     "source_message_document",
+    "telegram_search_terms",
 ]
