@@ -4,6 +4,18 @@ import argparse
 import tomllib
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
+
+
+def _main_marker(package: dict[str, Any], name: str) -> str:
+    marker_value = package.get("markers", "")
+    if marker_value is None:
+        return ""
+    if isinstance(marker_value, dict):
+        marker_value = marker_value.get("main", "")
+    if not isinstance(marker_value, str):
+        raise ValueError(f"poetry.lock markers are invalid for {name!r}")
+    return marker_value.strip()
 
 
 def _locked_main_requirements(lock_path: Path) -> tuple[str, ...]:
@@ -27,12 +39,7 @@ def _locked_main_requirements(lock_path: Path) -> tuple[str, ...]:
         if not isinstance(version, str) or not version.strip():
             raise ValueError(f"poetry.lock version is invalid for {name!r}")
 
-        marker_value = package.get("markers", "")
-        if marker_value is None:
-            marker_value = ""
-        if not isinstance(marker_value, str):
-            raise ValueError(f"poetry.lock markers are invalid for {name!r}")
-        marker = marker_value.strip()
+        marker = _main_marker(package, name)
         if marker == "<empty>":
             # Poetry uses this sentinel for a solver branch that cannot match
             # any environment. It must not become a PEP 508 requirement.
