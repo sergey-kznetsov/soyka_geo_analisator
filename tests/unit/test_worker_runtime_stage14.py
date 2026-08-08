@@ -125,6 +125,11 @@ class BrokenHeartbeatQueue(FakeQueue):
         raise RuntimeError("database heartbeat unavailable")
 
 
+class BrokenClaimQueue(FakeQueue):
+    def claim(self, *, worker_id, compute_class, lease_seconds):
+        raise RuntimeError("database claim unavailable")
+
+
 class RecordingAlertSink:
     def __init__(self) -> None:
         self.alerts = []
@@ -141,7 +146,6 @@ def _settings(**changes) -> WorkerSettings:
         "heartbeat_seconds": 1.0,
         "poll_seconds": 0.01,
         "wall_timeout_seconds": 1.0,
-        "shutdown_grace_seconds": 10.0,
         "retry_initial_seconds": 0.0,
         "retry_max_seconds": 0.0,
     }
@@ -294,6 +298,28 @@ def test_wall_timeout_requeues_only_the_timed_out_job() -> None:
     assert queue.released == [("analysis-timeout", True)]
     assert queue.acked == []
     assert runtime.metrics.snapshot()["jobs_timed_out_total"] == 1.0
+
+
+def test_polling_loop_backs_off_after_infrastructure_error() -> None:
+    queue = BrokenClaimQueue([])
+    sleeps: list[float] = []
+    runtime: WorkerRuntime
+
+    def sleeper(seconds: float) -> None:
+        sleeps.append(seconds)
+        runtime.request_shutdown("test")
+
+    runtime = WorkerRuntime(
+        queue,
+        lambda _context: None,
+        _settings(),
+        alert_sink=RecordingAlertSink(),
+        sleeper=sleeper,
+    )
+
+    assert runtime.run_forever() == 0
+    assert sleeps == [0.01]
+    assert runtime.metrics.snapshot()["loop_errors_total"] == 1.0
 
 
 def test_graceful_shutdown_stops_claiming_new_jobs() -> None:
