@@ -59,15 +59,29 @@ class WorkerControl:
 
     def retry(self, analysis_id: str) -> JobRecord:
         current = self.orchestrator.status(analysis_id)
-        if current.status is not JobStatus.FAILED:
+        if current.status is JobStatus.FAILED:
+            self.queue.retry(analysis_id)
+            try:
+                return self.orchestrator.retry_failed(analysis_id)
+            except BaseException:
+                with suppress(Exception):
+                    self.queue.request_cancel(analysis_id)
+                raise
+        if current.terminal:
             return self.orchestrator.retry_failed(analysis_id)
+
+        now = self.orchestrator.clock()
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("orchestrator clock must return timezone-aware datetime")
+        now = now.astimezone(UTC)
+        if current.lease_owner is not None and (
+            current.lease_expires_at is None or current.lease_expires_at > now
+        ):
+            raise JobLeaseError(
+                f"job {analysis_id} still has an active orchestration lease"
+            )
         self.queue.retry(analysis_id)
-        try:
-            return self.orchestrator.retry_failed(analysis_id)
-        except BaseException:
-            with suppress(Exception):
-                self.queue.request_cancel(analysis_id)
-            raise
+        return current
 
 
 class OrchestratorExecutor:
