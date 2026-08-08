@@ -192,6 +192,20 @@ jobs:
       - name: Export exact Poetry main-group lock versions
         run: python scripts/export_stage16_locked_requirements.py --output /tmp/poetry-main.txt
       - name: Audit locked runtime dependencies
+        id: audit-runtime
+        continue-on-error: true
         run: pip-audit -r /tmp/poetry-main.txt --no-deps --progress-spinner off
       - name: Audit storage runtime dependencies
+        id: audit-storage
+        continue-on-error: true
         run: pip-audit -r requirements-storage.txt --no-deps --progress-spinner off
+      - name: Enforce dependency audit gate
+        if: always()
+        env:
+          RUNTIME_AUDIT: ${{ steps.audit-runtime.outcome }}
+          STORAGE_AUDIT: ${{ steps.audit-storage.outcome }}
+        run: |
+          echo "runtime dependency audit: $RUNTIME_AUDIT"
+          echo "storage dependency audit: $STORAGE_AUDIT"
+          test "$RUNTIME_AUDIT" = success
+          test "$STORAGE_AUDIT" = success
