@@ -120,6 +120,11 @@ class FakeQueue:
         return QueueStats(ready=len(self.items))
 
 
+class BrokenHeartbeatQueue(FakeQueue):
+    def renew(self, analysis_id, *, worker_id, lease_seconds):
+        raise RuntimeError("database heartbeat unavailable")
+
+
 class RecordingAlertSink:
     def __init__(self) -> None:
         self.alerts = []
@@ -223,6 +228,34 @@ def test_one_failed_job_does_not_block_the_next_job() -> None:
     assert calls == ["analysis-bad", "analysis-good"]
     assert queue.released == [("analysis-bad", True)]
     assert queue.acked == ["analysis-good"]
+
+
+def test_queue_heartbeat_error_marks_lease_unsafe() -> None:
+    queue = BrokenHeartbeatQueue([])
+    alerts = RecordingAlertSink()
+    runtime = WorkerRuntime(
+        queue,
+        lambda _context: None,
+        _settings(queue_lease_seconds=1.0, heartbeat_seconds=0.01),
+        alert_sink=alerts,
+    )
+    cancellation = Event()
+    finished = Event()
+    lease_lost = Event()
+
+    heartbeat = runtime._start_heartbeat(
+        _item("analysis-heartbeat"),
+        cancellation,
+        finished,
+        lease_lost,
+    )
+
+    assert lease_lost.wait(0.5)
+    assert cancellation.is_set()
+    finished.set()
+    heartbeat.join(timeout=1.0)
+    assert runtime.metrics.snapshot()["lease_heartbeat_errors_total"] == 1.0
+    assert alerts.alerts[-1].code == "QUEUE_HEARTBEAT_ERROR"
 
 
 def test_canonical_failed_result_is_parked_for_explicit_retry() -> None:
