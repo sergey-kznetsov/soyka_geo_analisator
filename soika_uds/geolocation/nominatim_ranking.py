@@ -63,6 +63,23 @@ def _semantic_name(payload: Mapping[str, Any], label: str) -> str:
     return label
 
 
+def _house_street_name(payload: Mapping[str, Any], label: str) -> str:
+    """Prefer Nominatim's structured road when ranking a house mention.
+
+    A building or amenity name can legitimately precede the road in the
+    address payload (for example, Moscow City Hall at Tverskaya 13). House
+    selection must therefore compare the requested street with `address.road`
+    rather than accidentally comparing it with the building/amenity name.
+    """
+
+    address = payload.get("address")
+    if isinstance(address, Mapping):
+        road = address.get("road")
+        if isinstance(road, str) and road.strip():
+            return road.strip()
+    return _semantic_name(payload, label)
+
+
 def _name_similarity(mention: AddressMention, semantic_name: str) -> float:
     expected = mention.poi or mention.district or mention.street or mention.text
     expected_norm = _normalized(expected)
@@ -142,10 +159,10 @@ def semantic_confidence(
         else 0.0
     )
     order = 1.0 - rank / max(1, limit)
-    semantic_name = _semantic_name(payload, label)
-    name_score = _name_similarity(mention, semantic_name)
     reasons = ["nominatim_rank", "semantic_name_similarity"]
     if mention.kind is LocationKind.HOUSE:
+        semantic_name = _house_street_name(payload, label)
+        name_score = _name_similarity(mention, semantic_name)
         number_match = _house_match(mention, payload, label)
         score = 0.15 * importance + 0.10 * order + 0.35 * name_score
         if number_match:
@@ -155,6 +172,8 @@ def semantic_confidence(
             score = min(score, 0.44)
             reasons.append("house_number_missing")
     else:
+        semantic_name = _semantic_name(payload, label)
+        name_score = _name_similarity(mention, semantic_name)
         expected_numbers = _numbers(mention.text)
         actual_numbers = _numbers(semantic_name)
         number_score = 1.0 if expected_numbers == actual_numbers else 0.0
