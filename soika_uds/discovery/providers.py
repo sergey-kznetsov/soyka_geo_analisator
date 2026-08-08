@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import base64
+import json
+import socket
+import ssl
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-import requests
 from defusedxml.ElementTree import fromstring as safe_xml_fromstring
 
 from .models import SearchHit, SourceReasonCode
 
 _YANDEX_SEARCH_ENDPOINT = "https://searchapi.api.cloud.yandex.net/v2/web/search"
+_MAX_SEARCH_RESPONSE_BYTES = 8_000_000
 
 
 class SearchProviderError(RuntimeError):
@@ -45,9 +50,29 @@ class JsonPostTransport(Protocol):
     ) -> tuple[int, Mapping[str, Any]]: ...
 
 
+def _json_object(body: bytes, *, required: bool) -> Mapping[str, Any]:
+    try:
+        value = json.loads(body.decode())
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        if not required:
+            return {}
+        raise SearchProviderError(
+            SourceReasonCode.PARSER_FAILED,
+            "Yandex Search API returned invalid JSON",
+        ) from error
+    if not isinstance(value, Mapping):
+        if not required:
+            return {}
+        raise SearchProviderError(
+            SourceReasonCode.PARSER_FAILED,
+            "Yandex Search API returned a non-object JSON response",
+        )
+    return value
+
+
 @dataclass(frozen=True, slots=True)
-class RequestsJsonPostTransport:
-    """Minimal HTTPS-only transport dedicated to the fixed Yandex API endpoint."""
+class StdlibJsonPostTransport:
+    """HTTPS-only stdlib transport dedicated to the fixed Yandex API endpoint."""
 
     def post_json(
         self,
@@ -62,44 +87,57 @@ class RequestsJsonPostTransport:
                 SourceReasonCode.SOURCE_CONFIGURATION_MISSING,
                 "Yandex Search transport refused an unexpected endpoint",
             )
+        request = Request(
+            url,
+            data=json.dumps(dict(payload), ensure_ascii=False).encode(),
+            headers=dict(headers),
+            method="POST",
+        )
+        context = ssl.create_default_context()
         try:
-            response = requests.post(
-                url,
-                headers=dict(headers),
-                json=dict(payload),
+            with urlopen(
+                request,
                 timeout=timeout_seconds,
-            )
-        except requests.exceptions.Timeout as error:
+                context=context,
+            ) as response:
+                body = response.read(_MAX_SEARCH_RESPONSE_BYTES + 1)
+                if len(body) > _MAX_SEARCH_RESPONSE_BYTES:
+                    raise SearchProviderError(
+                        SourceReasonCode.PARSER_FAILED,
+                        "Yandex Search API response exceeded the size limit",
+                    )
+                return response.status, _json_object(body, required=True)
+        except HTTPError as error:
+            body = error.read(_MAX_SEARCH_RESPONSE_BYTES)
+            return error.code, _json_object(body, required=False)
+        except (TimeoutError, socket.timeout) as error:
             raise SearchProviderError(
                 SourceReasonCode.SOURCE_TIMEOUT,
                 "Yandex Search API request timed out",
                 retryable=True,
             ) from error
-        except requests.exceptions.SSLError as error:
+        except URLError as error:
+            if isinstance(error.reason, ssl.SSLError):
+                raise SearchProviderError(
+                    SourceReasonCode.SSL_ERROR,
+                    "Yandex Search API TLS validation failed",
+                ) from error
+            if isinstance(error.reason, socket.gaierror):
+                raise SearchProviderError(
+                    SourceReasonCode.DNS_ERROR,
+                    "Yandex Search API DNS resolution failed",
+                    retryable=True,
+                ) from error
+            raise SearchProviderError(
+                SourceReasonCode.SEARCH_PROVIDER_UNAVAILABLE,
+                "Yandex Search API connection failed",
+                retryable=True,
+            ) from error
+        except ssl.SSLError as error:
             raise SearchProviderError(
                 SourceReasonCode.SSL_ERROR,
                 "Yandex Search API TLS validation failed",
             ) from error
-        except requests.exceptions.ConnectionError as error:
-            raise SearchProviderError(
-                SourceReasonCode.DNS_ERROR,
-                "Yandex Search API connection failed",
-                retryable=True,
-            ) from error
-        try:
-            value = response.json()
-        except ValueError as error:
-            raise SearchProviderError(
-                SourceReasonCode.PARSER_FAILED,
-                "Yandex Search API returned invalid JSON",
-                retryable=response.status_code >= 500,
-            ) from error
-        if not isinstance(value, Mapping):
-            raise SearchProviderError(
-                SourceReasonCode.PARSER_FAILED,
-                "Yandex Search API returned a non-object JSON response",
-            )
-        return response.status_code, value
 
 
 def _xml_text(element: Any) -> str:
@@ -125,8 +163,13 @@ def _passages(element: Any) -> str:
     return " ".join(values)
 
 
-def parse_yandex_xml(raw_xml: bytes, *, query: str, provider: str) -> tuple[SearchHit, ...]:
-    """Parse only document fields from Yandex XML; all fields are treated as optional."""
+def parse_yandex_xml(
+    raw_xml: bytes,
+    *,
+    query: str,
+    provider: str,
+) -> tuple[SearchHit, ...]:
+    """Parse only document fields from Yandex XML; fields are optional."""
 
     try:
         root = safe_xml_fromstring(raw_xml)
@@ -166,7 +209,7 @@ class YandexSearchProvider:
 
     folder_id: str
     api_key: str
-    transport: JsonPostTransport = RequestsJsonPostTransport()
+    transport: JsonPostTransport = StdlibJsonPostTransport()
     timeout_seconds: float = 20.0
     region_id: str | None = None
     provider_id: str = "yandex-search-api-v2-ru"
@@ -256,7 +299,11 @@ class YandexSearchProvider:
                 SourceReasonCode.PARSER_FAILED,
                 "Yandex Search API rawData is not valid Base64",
             ) from error
-        return parse_yandex_xml(raw_xml, query=query.strip(), provider=self.provider_id)[:limit]
+        return parse_yandex_xml(
+            raw_xml,
+            query=query.strip(),
+            provider=self.provider_id,
+        )[:limit]
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,9 +321,9 @@ class UnavailableSearchProvider:
 
 __all__ = [
     "JsonPostTransport",
-    "RequestsJsonPostTransport",
     "SearchProvider",
     "SearchProviderError",
+    "StdlibJsonPostTransport",
     "UnavailableSearchProvider",
     "YandexSearchProvider",
     "parse_yandex_xml",
