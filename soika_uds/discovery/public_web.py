@@ -30,6 +30,8 @@ from .models import (
     SourceState,
 )
 
+_RELEVANT_HINTS = frozenset({"house", "street", "district"})
+
 
 def _normalize(value: str) -> str:
     return " ".join(value.casefold().replace("ё", "е").split())
@@ -253,6 +255,7 @@ class PublicWebCollector:
             ) from error
 
         messages: list[SourceMessage] = []
+        relevant = 0
         article = _article_message(
             candidate,
             policy,
@@ -262,6 +265,11 @@ class PublicWebCollector:
         )
         if article is not None:
             messages.append(article)
+            article_hint = geo_relevance_hint(
+                f"{page.title}\n{page.body_text}",
+                scope,
+            )
+            relevant += int(article_hint in _RELEVANT_HINTS)
         for index, comment in enumerate(page.comments):
             item = _comment_message(
                 candidate,
@@ -273,16 +281,10 @@ class PublicWebCollector:
             )
             if item is not None:
                 messages.append(item)
+                comment_hint = geo_relevance_hint(comment.text, scope)
+                relevant += int(comment_hint in _RELEVANT_HINTS)
 
         if messages:
-            hints = [
-                str(item.metadata.get("geo_relevance_hint", "unresolved"))
-                for item in messages
-            ]
-            relevant = sum(
-                hint in {"house", "street", "district"}
-                for hint in hints
-            )
             state = SourceState.COLLECTED
             reason = "source collected successfully"
             reason_code = SourceReasonCode.NONE
