@@ -42,6 +42,39 @@ def _enrich_scope(
     return replace(scope, metadata=metadata), result.outcomes
 
 
+def _inactive_outcome(candidate: SourceCandidate) -> SourceOutcome:
+    if candidate.kind is SourceKind.TELEGRAM:
+        return SourceOutcome(
+            source_id=candidate.candidate_id,
+            kind=candidate.kind,
+            state=SourceState.BLOCKED,
+            reason_code=SourceReasonCode.TERMS_RESTRICTED,
+            reason=(
+                "Telegram collection is disabled because current Telegram API and "
+                "Content Licensing terms prohibit scraping or aggregating platform "
+                "data for AI/ML development or deployment without a permitted exception"
+            ),
+            attempted_urls=(candidate.url,),
+            details={
+                "query": candidate.query,
+                "policy": "telegram-content-licensing-ai-scraping",
+                "collector_implemented": True,
+                "production_enabled": False,
+            },
+        )
+    return SourceOutcome(
+        source_id=candidate.candidate_id,
+        kind=candidate.kind,
+        state=SourceState.BLOCKED,
+        reason_code=SourceReasonCode.SOURCE_OUT_OF_SCOPE,
+        reason=(
+            f"{candidate.kind.value} is outside the active geo-first collection perimeter"
+        ),
+        attempted_urls=(candidate.url,),
+        details={"query": candidate.query},
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class DiscoveryEngine:
     provider: SearchProvider
@@ -116,20 +149,7 @@ class DiscoveryEngine:
                 )
                 candidates_by_url[hit.url] = candidate
                 if not active:
-                    outcomes.append(
-                        SourceOutcome(
-                            source_id=candidate.candidate_id,
-                            kind=kind,
-                            state=SourceState.BLOCKED,
-                            reason_code=SourceReasonCode.SOURCE_OUT_OF_SCOPE,
-                            reason=(
-                                f"{kind.value} is outside the active geo-first "
-                                "collection perimeter"
-                            ),
-                            attempted_urls=(candidate.url,),
-                            details={"query": candidate.query},
-                        )
-                    )
+                    outcomes.append(_inactive_outcome(candidate))
 
         return DiscoveryPlan(
             scope=scope,

@@ -183,8 +183,8 @@ def test_query_builder_is_ru_geo_bound_and_has_no_rutube_vk_ok() -> None:
     assert not any("ok.ru" in text.casefold() for text in texts)
 
 
-def test_active_perimeter_excludes_legacy_and_video_platforms() -> None:
-    assert SourceKind.TELEGRAM in ACTIVE_SOURCE_KINDS
+def test_active_perimeter_excludes_restricted_legacy_and_video_platforms() -> None:
+    assert SourceKind.TELEGRAM not in ACTIVE_SOURCE_KINDS
     assert SourceKind.LOCAL_MEDIA in ACTIVE_SOURCE_KINDS
     assert SourceKind.LOCAL_FORUM in ACTIVE_SOURCE_KINDS
     assert SourceKind.YANDEX_MAPS in ACTIVE_SOURCE_KINDS
@@ -217,15 +217,20 @@ def test_classifier_marks_known_platforms_and_local_forums() -> None:
     ) is SourceKind.RUTUBE
 
 
-def test_discovery_keeps_local_sources_and_explicitly_excludes_rutube() -> None:
+def test_discovery_keeps_local_and_blocks_telegram_and_rutube() -> None:
     scope = TerritoryResolver(FixedTerritoryEngine()).resolve(_territory())
     provider = RecordingSearchProvider()
     plan = DiscoveryEngine(provider, results_per_query=3).plan(scope)
 
     by_kind = {item.kind: item for item in plan.candidates}
     assert by_kind[SourceKind.LOCAL_MEDIA].active is True
-    assert by_kind[SourceKind.TELEGRAM].active is True
+    assert by_kind[SourceKind.TELEGRAM].active is False
     assert by_kind[SourceKind.RUTUBE].active is False
+
+    telegram = [item for item in plan.outcomes if item.kind is SourceKind.TELEGRAM]
+    assert telegram[0].state is SourceState.BLOCKED
+    assert telegram[0].reason_code is SourceReasonCode.TERMS_RESTRICTED
+
     excluded = [item for item in plan.outcomes if item.kind is SourceKind.RUTUBE]
     assert excluded[0].state is SourceState.BLOCKED
     assert excluded[0].reason_code is SourceReasonCode.SOURCE_OUT_OF_SCOPE
@@ -304,7 +309,7 @@ def test_preparing_handler_resolves_geo_then_builds_discovery_plan() -> None:
 
     assert result.output["territory_context"]["city"] == "Ижевск"
     assert result.output["discovery_plan"]["provider"] == "fixture-yandex"
-    assert result.output["discovery_plan"]["stats"]["active_candidates"] == 2
+    assert result.output["discovery_plan"]["stats"]["active_candidates"] == 1
     assert provider.queries
 
 
