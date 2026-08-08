@@ -7,7 +7,6 @@ x-worker-common: &worker-common
   tmpfs:
     - /tmp:size=512m,mode=1777
   volumes:
-    - soika-worker-data:/var/lib/soika
     - soika-worker-models:/var/cache/soika/models:ro
   secrets:
     - geoanalyzer_database_dsn
@@ -79,5 +78,4 @@ secrets:
     file: ${GEOANALYZER_DATABASE_DSN_FILE:?GEOANALYZER_DATABASE_DSN_FILE is required}
 
 volumes:
-  soika-worker-data:
   soika-worker-models:
