@@ -96,6 +96,11 @@ class PostgresJobQueue:
         "available_at, lease_owner, lease_expires_at, cancel_requested, "
         "trace_id, last_error, enqueued_at, updated_at"
     )
+    _CLAIM_RETURNING = (
+        "q.analysis_id, q.compute_class, q.priority, q.attempt, q.max_attempts, "
+        "q.available_at, q.lease_owner, q.lease_expires_at, q.cancel_requested, "
+        "q.trace_id, q.last_error, q.enqueued_at, q.updated_at"
+    )
 
     def __init__(
         self,
@@ -237,7 +242,7 @@ class PostgresJobQueue:
                 "FROM candidate AS c "
                 "WHERE q.application_id = c.application_id "
                 "AND q.analysis_id = c.analysis_id "
-                f"RETURNING {self._RETURNING}",
+                f"RETURNING {self._CLAIM_RETURNING}",
                 (
                     self.application,
                     compute_class.value,
