@@ -137,7 +137,6 @@ class WorkerRuntime:
             "worker will stop after the active job boundary",
             worker_id=self.settings.worker_id,
             reason=reason,
-            shutdown_grace_seconds=self.settings.shutdown_grace_seconds,
         )
 
     def install_signal_handlers(self) -> None:
@@ -432,7 +431,7 @@ class WorkerRuntime:
                     worked = self.run_once()
                 except QueueLeaseError:
                     self._consecutive_failures += 1
-                    worked = True
+                    worked = False
                 except Exception as error:  # noqa: BLE001 - keep other jobs alive
                     self.metrics.inc("loop_errors_total")
                     self._consecutive_failures += 1
@@ -451,7 +450,7 @@ class WorkerRuntime:
                         worker_id=self.settings.worker_id,
                         error_type=type(error).__name__,
                     )
-                    worked = True
+                    worked = False
                 if not worked and not self.stopping:
                     self.sleeper(self.settings.poll_seconds)
         finally:
