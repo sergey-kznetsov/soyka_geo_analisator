@@ -160,7 +160,7 @@ jobs:
         run: >-
           docker run --rm --entrypoint python soika-uds:cpu -c
           "import geoanalyzer_storage, psycopg, psycopg_pool, soika_uds.worker;
-          assert geoanalyzer_storage.__version__ == '1.0.0';
+          assert geoanalyzer_storage.__version__ == '1.1.0';
           assert psycopg.__version__ == '3.3.4';
           assert soika_uds.worker.ComputeClass.CPU.value == 'cpu'"
 
