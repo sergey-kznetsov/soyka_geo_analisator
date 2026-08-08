@@ -1,0 +1,102 @@
+name: refresh-flexible-address-evidence
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-and-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.15"
+          cache: pip
+      - name: Install locked geolocation runtime
+        run: |
+          python -m pip install --upgrade pip poetry==2.4.1
+          poetry install --only main --no-root --no-interaction
+          mkdir -p build/wheels
+          poetry run python -m pip download --no-deps --only-binary=:all: dawg2-python==0.9.0 --dest build/wheels
+          poetry run python -m pip uninstall -y dawg-python dawg2-python
+          poetry run python -m pip install --no-deps build/wheels/dawg2_python-0.9.0-py3-none-any.whl
+      - name: Refresh qualification evidence for current audit
+        run: |
+          poetry run python -m soika_uds.geolocation.qualification_cli \
+            --audit models/geolocation_model_audit_v1.json \
+            --validation models/geolocation_validation_v1.json \
+            --output build/geolocation-qualification-report.json \
+            --registry-output build/geolocation-production-registry.json \
+            --predictions-output build/geolocation-predictions.json \
+            --cache build/geolocation-refresh-cache.sqlite3 \
+            --user-agent "SOIKA-UDS-Flexible-Address-Qualification/0.20 (+https://github.com/sergey-kznetsov/soyka_geo_analisator)" \
+            --allow-network
+          echo QUALIFICATION_REPORT_BEGIN
+          cat build/geolocation-qualification-report.json
+          echo QUALIFICATION_REPORT_END
+          echo PRODUCTION_REGISTRY_BEGIN
+          cat build/geolocation-production-registry.json
+          echo PRODUCTION_REGISTRY_END
+      - name: Probe flexible Izhevsk address variants
+        run: |
+          poetry run python - <<'PY'
+          import json
+          from pathlib import Path
+          from soika_uds.geolocation.cache import SQLiteResponseCache
+          from soika_uds.geolocation.extraction import CompositeMentionExtractor, NatashaAddressExtractor, RuleBasedMentionExtractor
+          from soika_uds.geolocation.factory import public_nominatim_client
+          from soika_uds.geolocation.model_manager import LazyModelManager
+          from soika_uds.geolocation.models import GeolocationConfig, LocationKind
+          from soika_uds.geolocation.runtime import GeolocationEngine
+
+          variants = (
+              "Ижевск Пушкинская 277",
+              "Ижевск, Пушкинская, 277",
+              "Пушкинская 277",
+              "пушкинская 277",
+              "Ижевск Пушкинская, д. 277",
+              "Ижевск, ул. Пушкинская, д. 277",
+          )
+          manager = LazyModelManager()
+          extractor = CompositeMentionExtractor((RuleBasedMentionExtractor(), NatashaAddressExtractor(manager)))
+          cache = SQLiteResponseCache(Path("build/izhevsk-flexible-address.sqlite3"), namespace="izhevsk-flexible-v1")
+          provider = public_nominatim_client(cache, user_agent="SOIKA-UDS-Flexible-Address-Probe/0.20 (+https://github.com/sergey-kznetsov/soyka_geo_analisator)")
+          engine = GeolocationEngine(extractor, provider, config=GeolocationConfig(min_confidence=0.25, max_candidates=5, country_codes=("ru",), language="ru"))
+          messages = tuple({"message_key": f"variant-{index}", "model_text": text, "included_for_analysis": True} for index, text in enumerate(variants, 1))
+          batch = engine.geolocate(messages, city="Ижевск")
+          payload = {"inputs": list(variants), "batch": batch.to_dict()}
+          failures = []
+          for source, result in zip(variants, batch.results, strict=True):
+              selected = result.selected
+              if result.mention is None or result.mention.kind is not LocationKind.HOUSE or result.mention.house_number is None or not result.mention.house_number.startswith("277"):
+                  failures.append(f"{source}: house components not preserved")
+                  continue
+              if selected is None or selected.kind is not LocationKind.HOUSE or result.included_for_analysis is not True:
+                  failures.append(f"{source}: exact house candidate not selected")
+                  continue
+              road = str(selected.address.get("road", "")).casefold().replace("ё", "е")
+              number = str(selected.address.get("house_number", "")).casefold()
+              if "пушкин" not in road or not number.startswith("277"):
+                  failures.append(f"{source}: selected address differs: {selected.label}")
+          Path("build/izhevsk-flexible-address-result.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print("IZHEVSK_FLEXIBLE_RESULT_BEGIN")
+          print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+          print("IZHEVSK_FLEXIBLE_RESULT_END")
+          if failures:
+              raise SystemExit("; ".join(failures))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flexible-address-refresh
+          retention-days: 7
+          path: |
+            build/geolocation-qualification-report.json
+            build/geolocation-production-registry.json
+            build/geolocation-predictions.json
+            build/izhevsk-flexible-address-result.json
