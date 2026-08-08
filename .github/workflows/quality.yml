@@ -143,28 +143,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate worker Compose isolation contract
+      - name: Validate worker and module API Compose isolation contract
         run: |
-          printf '%s\n' 'postgresql://example.invalid/geoanalyzer' > /tmp/stage14-worker-dsn
+          printf '%s\n' 'postgresql://example.invalid/geoanalyzer' > /tmp/stage15-dsn
+          printf '%s\n' 'stage15-ci-module-token' > /tmp/stage15-module-token
           SOIKA_WORKER_EXECUTOR=example.module:factory \
-          GEOANALYZER_DATABASE_DSN_FILE=/tmp/stage14-worker-dsn \
-            docker compose -f docker-compose.workers.yml config >/tmp/stage14-workers.yml
-          ! grep -qE '^[[:space:]]+ports:' /tmp/stage14-workers.yml
-          grep -q 'mem_limit:' /tmp/stage14-workers.yml
-          grep -q 'geoanalyzer_backend' /tmp/stage14-workers.yml
-          grep -q '127.0.0.1:9090/healthz' /tmp/stage14-workers.yml
-          ! grep -q '127.0.0.1:8080/healthz' /tmp/stage14-workers.yml
+          GEOANALYZER_DATABASE_DSN_FILE=/tmp/stage15-dsn \
+          SOIKA_MODULE_AUTH_TOKEN_FILE=/tmp/stage15-module-token \
+            docker compose -f docker-compose.workers.yml config >/tmp/stage15-runtime.yml
+          ! grep -qE '^[[:space:]]+ports:' /tmp/stage15-runtime.yml
+          grep -q 'mem_limit:' /tmp/stage15-runtime.yml
+          grep -q 'geoanalyzer_backend' /tmp/stage15-runtime.yml
+          grep -q '127.0.0.1:9090/healthz' /tmp/stage15-runtime.yml
+          grep -q '127.0.0.1:9080/v1/health' /tmp/stage15-runtime.yml
+          grep -q 'soika_module_auth_token' /tmp/stage15-runtime.yml
+          ! grep -q '127.0.0.1:8080/healthz' /tmp/stage15-runtime.yml
 
       - name: Build CPU image
         run: docker build --target cpu --tag soika-uds:cpu .
 
-      - name: Validate storage and worker runtime in CPU image
+      - name: Validate storage, worker and module transport in CPU image
         run: >-
           docker run --rm --entrypoint python soika-uds:cpu -c
-          "import geoanalyzer_storage, psycopg, psycopg_pool, soika_uds.worker;
+          "import geoanalyzer_storage, psycopg, psycopg_pool, soika_uds, soika_uds.transport, soika_uds.worker;
           assert geoanalyzer_storage.__version__ == '1.1.0';
           assert psycopg.__version__ == '3.3.4';
-          assert soika_uds.worker.ComputeClass.CPU.value == 'cpu'"
+          assert soika_uds.__version__ == '0.20.0';
+          assert soika_uds.worker.ComputeClass.CPU.value == 'cpu';
+          assert soika_uds.transport.MODULE_PROTOCOL_VERSION == '1.0.0'"
 
       - name: Start CPU environment
         run: docker run --detach --name soika-cpu --publish 18080:8080 soika-uds:cpu
