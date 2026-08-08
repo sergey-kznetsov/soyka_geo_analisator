@@ -110,7 +110,7 @@ class StdlibJsonPostTransport:
         except HTTPError as error:
             body = error.read(_MAX_SEARCH_RESPONSE_BYTES)
             return error.code, _json_object(body, required=False)
-        except (TimeoutError, socket.timeout) as error:
+        except TimeoutError as error:
             raise SearchProviderError(
                 SourceReasonCode.SOURCE_TIMEOUT,
                 "Yandex Search API request timed out",
