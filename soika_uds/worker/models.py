@@ -155,7 +155,6 @@ class WorkerSettings:
     heartbeat_seconds: float = 30.0
     poll_seconds: float = 1.0
     wall_timeout_seconds: float = 3600.0
-    shutdown_grace_seconds: float = 120.0
     retry_initial_seconds: float = 5.0
     retry_multiplier: float = 2.0
     retry_max_seconds: float = 300.0
@@ -169,7 +168,6 @@ class WorkerSettings:
             "heartbeat_seconds",
             "poll_seconds",
             "wall_timeout_seconds",
-            "shutdown_grace_seconds",
         ):
             value = getattr(self, name)
             if not isinstance(value, int | float) or not math.isfinite(float(value)):
