@@ -197,6 +197,43 @@ def test_retry_exhaustion_and_explicit_retry_are_durable(
     queue.ack(analysis_id, worker_id="stage14-retry")
 
 
+def test_expired_lease_contributes_to_oldest_ready_age(
+    database: PostgresDatabase,
+) -> None:
+    queue = PostgresJobQueue(database)
+    analysis_id = _analysis_id("expired-age")
+    _create_job(database, analysis_id)
+    queue.enqueue(analysis_id, compute_class=ComputeClass.CPU)
+    claimed = queue.claim(
+        worker_id="stage14-expired-age",
+        compute_class=ComputeClass.CPU,
+        lease_seconds=60,
+    )
+    assert claimed is not None
+
+    with database.connection() as connection:
+        connection.execute(
+            "UPDATE ga_core.job_queue SET "
+            "available_at = clock_timestamp() - interval '60 seconds', "
+            "lease_expires_at = clock_timestamp() - interval '1 second' "
+            "WHERE application_id = 'soika' AND analysis_id = %s",
+            (analysis_id,),
+        )
+
+    stats = queue.stats(ComputeClass.CPU)
+
+    assert stats.ready >= 1
+    assert stats.oldest_ready_age_seconds >= 50
+    queue.retry(analysis_id)
+    reclaimed = queue.claim(
+        worker_id="stage14-expired-age-retry",
+        compute_class=ComputeClass.CPU,
+        lease_seconds=60,
+    )
+    assert reclaimed is not None
+    queue.ack(analysis_id, worker_id="stage14-expired-age-retry")
+
+
 def test_cancelled_queue_item_is_not_claimed(
     database: PostgresDatabase,
 ) -> None:
