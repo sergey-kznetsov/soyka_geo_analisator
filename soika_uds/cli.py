@@ -108,7 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     probes = subparsers.add_parser(
         "serve-probes", help="serve internal /healthz and /readyz endpoints"
     )
-    probes.add_argument("--host", default="0.0.0.0")
+    probes.add_argument("--host", default="127.0.0.1")
     probes.add_argument("--port", type=int, default=8080)
     _add_repository_root(probes)
 
