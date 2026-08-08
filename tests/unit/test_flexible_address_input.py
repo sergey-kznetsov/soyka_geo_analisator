@@ -119,7 +119,9 @@ def _engine(provider: CapturingProvider) -> GeolocationEngine:
 
 
 def test_engine_uses_city_as_context_not_as_part_of_street_name() -> None:
-    provider = CapturingProvider((_candidate("house", kind=LocationKind.HOUSE, confidence=0.8),))
+    provider = CapturingProvider(
+        (_candidate("house", kind=LocationKind.HOUSE, confidence=0.8),)
+    )
 
     result = _engine(provider).geolocate(
         (
