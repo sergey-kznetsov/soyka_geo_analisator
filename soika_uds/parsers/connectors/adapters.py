@@ -12,8 +12,9 @@ from html.parser import HTMLParser
 from types import MappingProxyType
 from typing import Any, Protocol
 from urllib.parse import urlencode, urljoin, urlsplit
-from defusedxml.ElementTree import fromstring as safe_xml_fromstring
 from xml.etree import ElementTree
+
+from defusedxml.ElementTree import fromstring as safe_xml_fromstring
 
 from ...contracts import SourceMessage
 from ..models import (
